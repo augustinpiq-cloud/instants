@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Instants">
+<meta name="theme-color" content="#1F3329">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="manifest" href="manifest.json">
+<title>Instants — le carnet du groupe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1E2A22; --ink-soft:#4B564C;
+    --paper:#F6F1E4; --paper-dim:#EEE7D4;
+    --pine:#1F3329; --pine-deep:#182720;
+    --gold:#C9A24C; --gold-soft:#E4CE93;
+    --teal:#4C7A6C; --rose:#A66B63;
+    --line:#D9CFB3; --radius:14px; --danger:#B5453D;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--pine-deep);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+  }
+  ::selection{ background:var(--gold-soft); }
+  button, input{ font-family:inherit; }
+
+  .app-shell{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    height:100vh;
+    background:var(--paper);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    box-shadow:0 0 60px rgba(0,0,0,0.35);
+    overflow:hidden;
+  }
+  .screen{
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  /* ---------- Loading / auth ---------- */
+  .center-screen{
+    height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:32px; text-align:center;
+  }
+  .brand-block{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:6px; }
+  .brand-mark{ width:13px;height:13px;border-radius:50%; background:var(--gold); box-shadow:0 0 0 4px rgba(201,162,76,0.2); }
+  .brand-title{ font-family:'Fraunces', serif; font-weight:700; font-size:32px; margin:0; color:var(--pine); }
+  .brand-sub{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:0.6px; text-transform:uppercase; color:var(--ink-soft); }
+  .spinner{
+    width:26px;height:26px;border-radius:50%;
+    border:3px solid var(--line); border-top-color:var(--pine);
+    animation:spin 0.8s linear infinite; margin-top:18px;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .auth-card{ width:100%; max-width:340px; margin-top:14px; }
+  .auth-tabs{ display:flex; background:var(--paper-dim); border-radius:12px; padding:4px; margin-bottom:22px; }
+  .auth-tab{ all:unset; flex:1; text-align:center; padding:9px 0; border-radius:9px; font-size:13.5px; font-weight:500; color:var(--ink-soft); cursor:pointer; }
+  .auth-tab.active{ background:#fff; color:var(--pine); box-shadow:0 2px 6px rgba(31,51,41,0.12); }
+  .field{ text-align:left; margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; color:var(--ink-soft); margin-bottom:5px; font-weight:500; }
+  .field input{
+    width:100%; border:1px solid var(--line); border-radius:10px; padding:11px 13px;
+    font-size:14.5px; outline:none; background:#fff;
+  }
+  .field input:focus{ border-color:var(--teal); }
+  .pin-row{ display:flex; gap:8px; }
+  .pin-row input{ text-align:center; letter-spacing:2px; }
+  .color-picker{ display:flex; gap:8px; flex-wrap:wrap; margin-top:2px; }
+  .color-swatch{
+    width:32px;height:32px;border-radius:50%; cursor:pointer; border:3px solid transparent;
+  }
+  .color-swatch.selected{ border-color:var(--pine); }
+  .form-error{ color:var(--danger); font-size:12.5px; margin:-6px 0 12px; text-align:left; }
+  .btn-primary{
+    all:unset; cursor:pointer; display:block; text-align:center;
+    background:var(--pine); color:var(--paper);
+    padding:13px 20px; border-radius:11px; font-size:14.5px; font-weight:500; width:100%;
+  }
+  .btn-primary:hover{ background:var(--pine-deep); }
+  .btn-primary:disabled{ opacity:0.5; cursor:not-allowed; }
+  .btn-secondary{
+    all:unset; cursor:pointer; display:block; text-align:center;
+    background:var(--paper-dim); color:var(--ink);
+    padding:13px 20px; border-radius:11px; font-size:14.5px; font-weight:500; width:100%;
+  }
+  .btn-secondary:hover{ background:var(--line); }
+  .btn-text{ all:unset; cursor:pointer; color:var(--teal); font-size:13px; font-weight:500; }
+  .helper-text{ font-size:12px; color:var(--ink-soft); margin-top:14px; line-height:1.5; }
+
+  /* ---------- Header ---------- */
+  .app-header{
+    padding:max(16px, env(safe-area-inset-top)) 18px 14px;
+    background:var(--pine);
+    color:var(--paper);
+    display:flex; align-items:center; gap:12px;
+    flex-shrink:0;
+  }
+  .app-header h2{ font-family:'Fraunces', serif; font-weight:600; font-size:19px; margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .icon-btn{
+    all:unset; cursor:pointer; width:34px;height:34px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:16px;
+    color:var(--paper); flex-shrink:0;
+  }
+  .icon-btn:hover{ background:rgba(246,241,228,0.12); }
+  .header-avatar{
+    width:32px;height:32px;border-radius:50%; display:flex;align-items:center;justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:#fff; cursor:pointer; flex-shrink:0;
+  }
+
+  /* ---------- Home ---------- */
+  .home-content{ padding:18px 18px 90px; }
+  .section-label{ font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--ink-soft); margin:0 0 10px; }
+  .group-card{
+    background:#fff; border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 16px; margin-bottom:12px; cursor:pointer; display:flex; align-items:center; gap:12px;
+    transition:transform 0.12s ease;
+  }
+  .group-card:hover{ transform:translateY(-1px); }
+  .group-thumb{ width:52px;height:52px;border-radius:12px; object-fit:cover; background:var(--paper-dim); flex-shrink:0; }
+  .group-thumb.placeholder{ display:flex; align-items:center; justify-content:center; font-size:20px; }
+  .group-card .info{ min-width:0; flex:1; }
+  .group-card .gname{ font-weight:600; font-size:15px; margin:0 0 2px; }
+  .group-card .gmeta{ font-size:12px; color:var(--ink-soft); margin:0; }
+  .group-card .chev{ color:var(--ink-soft); flex-shrink:0; }
+  .empty-state{
+    text-align:center; padding:36px 20px; color:var(--ink-soft); font-size:14px; line-height:1.6;
+  }
+  .empty-state .big-emoji{ font-size:36px; display:block; margin-bottom:10px; }
+  .home-actions{ display:flex; flex-direction:column; gap:10px; margin-top:22px; }
+
+  /* ---------- Bottom nav ---------- */
+  .bottom-nav{
+    display:flex; border-top:1px solid var(--line); background:#fff;
+    padding:8px 10px max(8px, env(safe-area-inset-bottom));
+    flex-shrink:0;
+  }
+  .nav-btn{
+    all:unset; flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:6px 0; cursor:pointer; color:var(--ink-soft); font-size:10.5px; font-weight:500;
+  }
+  .nav-btn .ic{ font-size:19px; }
+  .nav-btn.active{ color:var(--pine); }
+
+  /* ---------- Group screen ---------- */
+  .segmented{ display:flex; gap:2px; padding:12px 18px 0; }
+  .seg-btn{
+    all:unset; cursor:pointer; padding:9px 0; flex:1; text-align:center;
+    font-size:13.5px; font-weight:500; color:var(--ink-soft); border-bottom:2px solid transparent;
+  }
+  .seg-btn.active{ color:var(--pine); border-bottom-color:var(--gold); }
+  .group-content{ padding:16px 18px 100px; }
+  .refresh-row{ display:flex; justify-content:flex-end; margin-bottom:10px; }
+  .refresh-btn{ all:unset; cursor:pointer; font-size:12px; color:var(--teal); font-weight:500; display:flex; align-items:center; gap:4px; }
+
+  /* ---------- Feed ---------- */
+  .feed{ display:flex; flex-direction:column; gap:18px; }
+  .post-card{ background:#fff; border-radius:var(--radius); border:1px solid var(--line); overflow:hidden; cursor:pointer; }
+  .post-head{ display:flex; align-items:center; gap:9px; padding:12px 14px 9px; }
+  .post-head .name{ font-weight:600; font-size:13.5px; }
+  .post-head .date{ margin-left:auto; font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); }
+  .post-img{ width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:var(--paper-dim); }
+  .post-body{ padding:11px 14px 14px; }
+  .post-caption{ font-size:14px; line-height:1.5; margin:0 0 9px; }
+  .post-foot{ display:flex; align-items:center; gap:12px; font-size:12.5px; color:var(--ink-soft); flex-wrap:wrap; }
+  .reaction-chip{ display:inline-flex; align-items:center; gap:4px; background:var(--paper-dim); border-radius:20px; padding:3px 9px; font-size:12px; }
+
+  /* ---------- Calendar ---------- */
+  .year-header{ margin-bottom:14px; }
+  .year-header h3{ font-family:'Fraunces', serif; font-size:18px; margin:0 0 2px; font-weight:600; }
+  .year-header span{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); }
+  .months-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .month-block{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; }
+  .month-title{ font-family:'IBM Plex Mono', monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.7px; color:var(--ink-soft); margin-bottom:7px; }
+  .day-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:2.5px; }
+  .day-cell{ aspect-ratio:1/1; border-radius:3px; background:var(--paper-dim); background-size:cover; background-position:center; }
+  .day-cell.empty{ background:transparent; }
+  .day-cell.has-photo{ cursor:pointer; box-shadow:inset 0 0 0 1px #fff; }
+  .cal-legend{ display:flex; align-items:center; gap:7px; margin-top:16px; font-size:11px; color:var(--ink-soft); }
+  .cal-legend .sw{ width:9px;height:9px;border-radius:3px; }
+
+  /* ---------- Book ---------- */
+  .book-intro p{ color:var(--ink-soft); font-size:13.5px; line-height:1.6; }
+  .book-spread{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .book-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .book-photo{ border-radius:8px; overflow:hidden; position:relative; }
+  .book-photo img{ width:100%; height:110px; object-fit:cover; display:block; }
+  .book-photo .cap{ position:absolute; bottom:0; left:0; right:0; background:linear-gradient(180deg, transparent, rgba(30,42,34,0.75)); color:#fff; font-size:9.5px; padding:12px 6px 5px; font-family:'IBM Plex Mono', monospace; }
+  .book-actions{ display:flex; flex-direction:column; gap:8px; padding-top:6px; border-top:1px dashed var(--line); }
+  .book-price{ font-size:12px; color:var(--ink-soft); text-align:center; }
+
+  /* ---------- Profile ---------- */
+  .profile-content{ padding:24px 20px 90px; }
+  .profile-head{ display:flex; flex-direction:column; align-items:center; text-align:center; margin-bottom:26px; }
+  .avatar-lg{ width:74px;height:74px;border-radius:50%; display:flex;align-items:center;justify-content:center; font-family:'Fraunces',serif; font-size:28px; color:#fff; margin-bottom:12px; }
+  .profile-head h3{ font-family:'Fraunces', serif; margin:0 0 3px; font-size:20px; }
+  .profile-head .uname{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-soft); }
+  .profile-list{ display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+  .list-row{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; cursor:pointer; font-size:14px; }
+  .list-row.danger{ color:var(--danger); }
+
+  /* ---------- Forms (create/join group) ---------- */
+  .form-content{ padding:22px 20px 40px; }
+  .form-content h3{ font-family:'Fraunces', serif; font-size:20px; margin:0 0 6px; }
+  .form-content .hint{ font-size:13px; color:var(--ink-soft); margin:0 0 20px; line-height:1.5; }
+
+  /* ---------- FAB ---------- */
+  .fab{
+    position:absolute; right:20px; bottom:86px;
+    width:54px;height:54px;border-radius:50%;
+    background:var(--gold); color:var(--pine-deep);
+    display:flex; align-items:center; justify-content:center; font-size:24px;
+    box-shadow:0 8px 20px -6px rgba(201,162,76,0.6);
+    border:none; cursor:pointer; z-index:5;
+  }
+  .fab:hover{ background:var(--gold-soft); }
+
+  /* ---------- Overlay / modal ---------- */
+  .overlay{ position:fixed; inset:0; background:rgba(24,39,32,0.62); display:none; align-items:flex-end; justify-content:center; z-index:40; }
+  .overlay.open{ display:flex; }
+  .modal-sheet{
+    background:#fff; width:100%; max-width:480px; border-radius:20px 20px 0 0;
+    max-height:90vh; display:flex; flex-direction:column; overflow:hidden;
+  }
+  .sheet-head{ display:flex; align-items:center; padding:16px 18px 12px; border-bottom:1px solid var(--line); gap:10px; }
+  .sheet-head h4{ font-family:'Fraunces', serif; font-size:17px; margin:0; flex:1; }
+  .sheet-body{ overflow-y:auto; flex:1; }
+
+  .modal-img-wrap{ width:100%; aspect-ratio:4/3; background:var(--paper-dim); }
+  .modal-img-wrap img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .modal-caption{ padding:13px 18px; font-size:14px; line-height:1.5; border-bottom:1px solid var(--line); }
+  .modal-reactions{ display:flex; gap:8px; padding:11px 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .react-btn{ all:unset; cursor:pointer; display:inline-flex; align-items:center; gap:5px; background:var(--paper-dim); border-radius:20px; padding:5px 11px; font-size:13px; }
+  .react-btn:hover{ background:var(--gold-soft); }
+  .modal-comments{ padding:12px 18px; display:flex; flex-direction:column; gap:11px; }
+  .comment{ font-size:13.5px; line-height:1.5; }
+  .comment .cname{ font-weight:600; margin-right:5px; }
+  .replies-row{ display:flex; gap:8px; margin-top:4px; flex-wrap:wrap; }
+  .reply-thumb{ width:50px; height:50px; border-radius:8px; object-fit:cover; border:1px solid var(--line); }
+  .reply-add{ width:50px; height:50px; border-radius:8px; border:1.5px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:18px; cursor:pointer; background:transparent; }
+  .modal-footer{ padding:10px 14px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; flex-shrink:0; }
+  .modal-footer input[type=text]{ flex:1; border:1px solid var(--line); border-radius:20px; padding:9px 14px; font-size:13.5px; outline:none; }
+  .send-btn{ all:unset; cursor:pointer; background:var(--pine); color:var(--paper); padding:9px 16px; border-radius:20px; font-size:13px; font-weight:500; }
+
+  /* add post sheet */
+  .upload-zone{
+    margin:16px 18px; border:1.5px dashed var(--line); border-radius:14px; padding:28px 16px;
+    text-align:center; cursor:pointer; color:var(--ink-soft); font-size:13.5px;
+  }
+  .upload-zone.has-img{ padding:0; border-style:solid; overflow:hidden; }
+  .upload-zone img{ width:100%; max-height:280px; object-fit:cover; display:block; }
+  .form-block{ padding:0 18px 16px; }
+  .checkbox-row{ display:flex; align-items:center; gap:9px; font-size:13.5px; padding:6px 0 16px; }
+
+  /* invite sheet */
+  .invite-code{
+    font-family:'IBM Plex Mono', monospace; font-size:30px; letter-spacing:6px; text-align:center;
+    background:var(--paper-dim); border-radius:12px; padding:20px; margin:16px 18px; color:var(--pine); font-weight:600;
+  }
+
+  .toast{
+    position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--pine); color:var(--paper); padding:11px 18px; border-radius:10px; font-size:13px;
+    opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:60; max-width:90%; text-align:center;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .install-banner{
+    display:flex; align-items:center; gap:8px;
+    background:var(--gold-soft); color:var(--pine-deep);
+    padding:10px 12px; margin:0; font-size:12.5px;
+  }
+  .install-banner .ib-icon{ font-size:16px; flex-shrink:0; }
+  .install-banner .ib-text{ flex:1; line-height:1.35; }
+  .install-banner .ib-action{
+    all:unset; cursor:pointer; background:var(--pine); color:var(--paper);
+    padding:6px 11px; border-radius:8px; font-size:12px; font-weight:500; flex-shrink:0; white-space:nowrap;
+  }
+  .install-banner .ib-dismiss{
+    all:unset; cursor:pointer; font-size:14px; color:var(--pine-deep); opacity:0.6; flex-shrink:0; padding:0 2px;
+  }
+
+  @media (min-width: 481px){
+    body{ display:flex; align-items:center; justify-content:center; }
+    .app-shell{ height:92vh; max-height:900px; border-radius:28px; margin:20px auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app-shell" id="app-shell"></div>
+<div class="overlay" id="overlay"><div class="modal-sheet" id="modal-sheet"></div></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="hidden-file" accept="image/*" style="display:none" />
+<input type="file" id="reply-file" accept="image/*" style="display:none" />
+
+<script type="module">
+/* ===================== Supabase setup =====================
+   1. Go to https://supabase.com, sign up free (no card required).
+   2. Create a new project (pick any name/region, set a database password — you won't need it again).
+   3. Once the project is ready, open the "SQL Editor" tab and run this once:
+
+        create table instants (
+          key text primary key,
+          value text,
+          updated_at timestamptz default now()
+        );
+        alter table instants enable row level security;
+        create policy "public access" on instants for all using (true) with check (true);
+
+   4. Go to "Project Settings" > "API". Copy the "Project URL" and the "anon public" key.
+   5. Paste them below, replacing the two placeholders.
+*/
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = "https://gfomqbtsubtijanujun.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmb21xYnRzdWJ0aWphbnVianVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDg3NTksImV4cCI6MjEwMTYyNDc1OX0.Ognsd4cL-m2_zsY1WPw3Tpg0BrTJb9NCJ32xQqm3t00";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ===================== Storage helpers ===================== */
+async function storGet(key, shared){
+  try{
+    const { data, error } = await supabase.from("instants").select("value").eq("key", key).maybeSingle();
+    if(error) throw error;
+    return data && data.value ? JSON.parse(data.value) : null;
+  }catch(e){ console.error("storGet error", e); return null; }
+}
+async function storSet(key, value, shared, retries){
+  if(retries === undefined) retries = 2;
+  const payload = JSON.stringify(value);
+  for(let attempt = 0; attempt <= retries; attempt++){
+    try{
+      const { error } = await supabase.from("instants").upsert({ key, value: payload, updated_at: new Date().toISOString() });
+      if(!error) return true;
+      console.error("storage error", error);
+    }catch(e){
+      console.error("storage error (attempt "+(attempt+1)+"/"+(retries+1)+")", e);
+    }
+    if(attempt < retries){ await new Promise(res => setTimeout(res, 600*(attempt+1))); }
+  }
+  return false;
+}
+
+
+/* ===================== App state ===================== */
+let users = [];          // {username, displayName, avatarColor, pin}
+let groupsData = [];     // {id, name, subtitle, memberUsernames, joinCode, createdBy}
+let postsCache = {};     // groupId -> posts[]
+let currentUser = null;
+let screen = "loading";  // loading | login | home | profile | createGroup | joinGroup | group
+let authMode = "login";  // login | signup
+let selectedColor = "#4C7A6C";
+let activeGroupId = null;
+let activeView = "fil";
+let modalType = null;    // null | postDetail | addPost | invite
+let activeModalPostId = null;
+let pendingReplyPostId = null;
+let newPostPhoto = null; // dataURL
+let newPostFavorite = false;
+let pendingJoinCode = null;
+let installBannerDismissed = false;
+let deferredInstallPrompt = null;
+
+const PALETTE = ["#4C7A6C","#A66B63","#C9A24C","#5C6FA6","#8A7CA8","#7A9E6E","#B08968"];
+const REACTION_SET = ["❤️","👏","😂","🔥"];
+const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+function uid(prefix){ return prefix + "-" + Math.random().toString(36).slice(2,9); }
+function genCode(){
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let c = "";
+  for(let i=0;i<6;i++){ c += chars[Math.floor(Math.random()*chars.length)]; }
+  return c;
+}
+function slugUsername(name){ return name.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,""); }
+function findUserByName(name){
+  const slug = slugUsername(name);
+  return users.find(u => u.username === slug);
+}
+function formatDateFR(dateStr){
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" });
+}
+function formatDateShort(dateStr){
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("fr-FR", { day:"numeric", month:"short" });
+}
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+/* ===================== Image compression ===================== */
+function compressImage(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 900;
+        let { width, height } = img;
+        if(width > height){ if(width > maxDim){ height = height*maxDim/width; width = maxDim; } }
+        else{ if(height > maxDim){ width = width*maxDim/height; height = maxDim; } }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        // Iteratively lower quality until the payload stays comfortably under storage limits.
+        let quality = 0.6;
+        let dataUrl = canvas.toDataURL("image/jpeg", quality);
+        let attempts = 0;
+        while(dataUrl.length > 700000 && attempts < 4){
+          quality = Math.max(0.25, quality - 0.12);
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+          attempts++;
+        }
+        resolve(dataUrl);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ===================== Toast ===================== */
+let toastTimer = null;
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> t.classList.remove("show"), 2600);
+}
+
+/* ===================== Data loading ===================== */
+async function loadUsers(){ users = (await storGet("users-list", true)) || []; }
+async function saveUsers(){
+  const ok = await storSet("users-list", users, true);
+  if(!ok) showToast("⚠️ Sauvegarde du compte impossible pour l'instant — réessaie dans un instant.");
+  return ok;
+}
+async function loadGroupsList(){ groupsData = (await storGet("groups-list", true)) || []; }
+async function saveGroupsList(){
+  const ok = await storSet("groups-list", groupsData, true);
+  if(!ok) showToast("⚠️ Sauvegarde du groupe impossible pour l'instant — réessaie dans un instant.");
+  return ok;
+}
+async function loadGroupPosts(groupId){ postsCache[groupId] = (await storGet("posts:"+groupId, true)) || []; }
+async function saveGroupPosts(groupId){
+  const ok = await storSet("posts:"+groupId, postsCache[groupId], true);
+  if(!ok) showToast("⚠️ Sauvegarde impossible pour l'instant — réessaie dans un instant.");
+  return ok;
+}
+
+function myGroups(){
+  if(!currentUser) return [];
+  return groupsData.filter(g => g.memberUsernames.includes(currentUser.username));
+}
+function getGroup(id){ return groupsData.find(g => g.id === id); }
+
+/* ===================== Install banner (Add to Home Screen) ===================== */
+function isStandalone(){
+  return window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+}
+function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+
+window.addEventListener("beforeinstallprompt", (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if(screen === "login" || screen === "home"){ render(); }
+});
+
+function renderInstallBanner(){
+  if(isStandalone() || installBannerDismissed) return "";
+  if(deferredInstallPrompt){
+    return `
+      <div class="install-banner">
+        <span class="ib-icon">📲</span>
+        <span class="ib-text">Installe Instants comme une appli sur ton téléphone.</span>
+        <button class="ib-action" id="install-action">Installer</button>
+        <button class="ib-dismiss" id="install-dismiss">✕</button>
+      </div>
+    `;
+  }
+  if(isIOS()){
+    return `
+      <div class="install-banner">
+        <span class="ib-icon">📲</span>
+        <span class="ib-text">Installe Instants sur ton écran d'accueil pour l'ouvrir comme une vraie appli.</span>
+        <button class="ib-action" id="install-help-open">Comment faire</button>
+        <button class="ib-dismiss" id="install-dismiss">✕</button>
+      </div>
+    `;
+  }
+  return "";
+}
+function bindInstallBanner(){
+  const dismissBtn = document.getElementById("install-dismiss");
+  if(dismissBtn){ dismissBtn.addEventListener("click", ()=>{ installBannerDismissed = true; render(); }); }
+  const installBtn = document.getElementById("install-action");
+  if(installBtn){ installBtn.addEventListener("click", async ()=>{
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    render();
+  }); }
+  const helpBtn = document.getElementById("install-help-open");
+  if(helpBtn){ helpBtn.addEventListener("click", ()=>{ modalType = "installHelp"; renderOverlay(); openOverlay(); }); }
+}
+
+/* ===================== Root render ===================== */
+async function init(){
+  const params = new URLSearchParams(window.location.search);
+  const codeParam = params.get("code");
+  if(codeParam){ pendingJoinCode = codeParam.trim().toUpperCase(); }
+  screen = "loading";
+  render();
+  await Promise.all([loadUsers(), loadGroupsList()]);
+  screen = "login";
+  render();
+}
+
+async function tryPendingJoin(){
+  if(!pendingJoinCode){ screen = "home"; render(); return; }
+  const code = pendingJoinCode;
+  pendingJoinCode = null;
+  const g = groupsData.find(gr => gr.joinCode === code);
+  if(!g){ showToast("Le lien d'invitation n'est plus valide."); screen = "home"; render(); return; }
+  if(!g.memberUsernames.includes(currentUser.username)){
+    g.memberUsernames.push(currentUser.username);
+    await saveGroupsList();
+  }
+  activeGroupId = g.id;
+  activeView = "fil";
+  screen = "group";
+  render();
+  if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
+  showToast(`Bienvenue dans ${g.name} 🎉`);
+}
+
+function render(){
+  const shell = document.getElementById("app-shell");
+  if(screen === "loading"){ shell.innerHTML = renderLoading(); return; }
+  if(screen === "login"){ shell.innerHTML = renderAuth(); bindAuth(); return; }
+  if(screen === "home"){ shell.innerHTML = renderHomeScreen(); bindHome(); return; }
+  if(screen === "profile"){ shell.innerHTML = renderProfileScreen(); bindProfile(); return; }
+  if(screen === "createGroup"){ shell.innerHTML = renderCreateGroupScreen(); bindCreateGroup(); return; }
+  if(screen === "joinGroup"){ shell.innerHTML = renderJoinGroupScreen(); bindJoinGroup(); return; }
+  if(screen === "group"){ shell.innerHTML = renderGroupScreen(); bindGroupScreen(); return; }
+}
+
+/* ===================== Loading ===================== */
+function renderLoading(){
+  return `
+    <div class="center-screen">
+      <div class="brand-block">
+        <span class="brand-mark"></span>
+        <h1 class="brand-title">Instants</h1>
+        <span class="brand-sub">Le carnet du groupe</span>
+      </div>
+      <div class="spinner"></div>
+    </div>
+  `;
+}
+
+/* ===================== Auth ===================== */
+function renderAuth(){
+  return `
+    <div class="screen">
+      ${renderInstallBanner()}
+      <div class="center-screen" style="justify-content:flex-start; padding-top:64px;">
+        <div class="brand-block" style="margin-bottom:26px;">
+          <span class="brand-mark"></span>
+          <h1 class="brand-title">Instants</h1>
+          <span class="brand-sub">Le carnet du groupe</span>
+        </div>
+        <div class="auth-card">
+          <div class="auth-tabs">
+            <button class="auth-tab ${authMode==='login'?'active':''}" data-mode="login">Se connecter</button>
+            <button class="auth-tab ${authMode==='signup'?'active':''}" data-mode="signup">Créer un compte</button>
+          </div>
+          ${authMode === "login" ? renderLoginForm() : renderSignupForm()}
+          ${pendingJoinCode ? `<p class="helper-text" style="color:var(--teal);">🔑 Tu as été invité·e à rejoindre un groupe — connecte-toi ou crée un compte pour y accéder directement.</p>` : ""}
+          <p class="helper-text">Pas de mot de passe compliqué : juste ton prénom et un code à 4 chiffres, entre vous. Simple, pensé pour un petit groupe de confiance — pas pour des données sensibles.</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function renderLoginForm(){
+  return `
+    <div id="auth-error"></div>
+    <div class="field">
+      <label>Ton prénom</label>
+      <input type="text" id="login-name" placeholder="ex. Sarah" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Code à 4 chiffres</label>
+      <input type="password" inputmode="numeric" maxlength="4" id="login-pin" placeholder="••••" />
+    </div>
+    <button class="btn-primary" id="login-submit">Se connecter</button>
+  `;
+}
+function renderSignupForm(){
+  return `
+    <div id="auth-error"></div>
+    <div class="field">
+      <label>Ton prénom</label>
+      <input type="text" id="signup-name" placeholder="ex. Sarah" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Choisis un code à 4 chiffres</label>
+      <input type="password" inputmode="numeric" maxlength="4" id="signup-pin" placeholder="••••" />
+    </div>
+    <div class="field">
+      <label>Ta couleur</label>
+      <div class="color-picker" id="color-picker">
+        ${PALETTE.map(c => `<span class="color-swatch ${c===selectedColor?'selected':''}" data-color="${c}" style="background:${c}"></span>`).join("")}
+      </div>
+    </div>
+    <button class="btn-primary" id="signup-submit">Créer mon compte</button>
+  `;
+}
+function bindAuth(){
+  bindInstallBanner();
+  document.querySelectorAll(".auth-tab").forEach(tab=>{
+    tab.addEventListener("click", ()=>{ authMode = tab.dataset.mode; render(); });
+  });
+  const errBox = document.getElementById("auth-error");
+  function setError(msg){ errBox.innerHTML = msg ? `<p class="form-error">${msg}</p>` : ""; }
+
+  if(authMode === "login"){
+    document.getElementById("login-submit").addEventListener("click", ()=>{
+      const name = document.getElementById("login-name").value.trim();
+      const pin = document.getElementById("login-pin").value.trim();
+      if(!name || !pin){ setError("Entre ton prénom et ton code."); return; }
+      const user = findUserByName(name);
+      if(!user || user.pin !== pin){ setError("Prénom ou code incorrect."); return; }
+      currentUser = user;
+      tryPendingJoin();
+    });
+  } else {
+    document.querySelectorAll(".color-swatch").forEach(sw=>{
+      sw.addEventListener("click", ()=>{ selectedColor = sw.dataset.color; render(); });
+    });
+    document.getElementById("signup-submit").addEventListener("click", async ()=>{
+      const name = document.getElementById("signup-name").value.trim();
+      const pin = document.getElementById("signup-pin").value.trim();
+      if(!name){ setError("Entre ton prénom."); return; }
+      if(!/^[0-9]{4}$/.test(pin)){ setError("Le code doit contenir 4 chiffres."); return; }
+      const slug = slugUsername(name);
+      if(!slug){ setError("Prénom invalide."); return; }
+      if(users.find(u => u.username === slug)){ setError("Ce prénom est déjà pris — ajoute une initiale, par exemple."); return; }
+      const newUser = { username: slug, displayName: name, avatarColor: selectedColor, pin };
+      users.push(newUser);
+      await saveUsers();
+      currentUser = newUser;
+      tryPendingJoin();
+    });
+  }
+}
+
+/* ===================== Home ===================== */
+function renderHomeScreen(){
+  const groups = myGroups();
+  return `
+    <div class="app-header">
+      <h2>Mes carnets</h2>
+      <span class="header-avatar" id="header-avatar" style="background:${currentUser.avatarColor}">${currentUser.displayName[0].toUpperCase()}</span>
+    </div>
+    <div class="screen">
+      ${renderInstallBanner()}
+      <div class="home-content">
+        ${groups.length === 0 ? `
+          <div class="empty-state">
+            <span class="big-emoji">📔</span>
+            Tu n'as pas encore de carnet.<br/>Crée un groupe ou rejoins celui de tes amis avec leur code.
+          </div>
+        ` : `
+          <p class="section-label">Tes groupes</p>
+          ${groups.map(g => {
+            const posts = postsCache[g.id] || [];
+            const last = [...posts].sort((a,b)=> b.date.localeCompare(a.date))[0];
+            return `
+              <div class="group-card" data-group="${g.id}">
+                ${last ? `<img class="group-thumb" src="${last.photo}" alt=""/>` : `<div class="group-thumb placeholder">📷</div>`}
+                <div class="info">
+                  <p class="gname">${g.name}</p>
+                  <p class="gmeta">${g.memberUsernames.length} membre${g.memberUsernames.length>1?"s":""} · ${posts.length} moment${posts.length>1?"s":""}</p>
+                </div>
+                <span class="chev">›</span>
+              </div>
+            `;
+          }).join("")}
+        `}
+        <div class="home-actions">
+          <button class="btn-primary" id="go-create-group">➕ Créer un groupe</button>
+          <button class="btn-secondary" id="go-join-group">🔑 Rejoindre avec un code</button>
+        </div>
+      </div>
+    </div>
+    ${renderBottomNav("home")}
+  `;
+}
+function bindHome(){
+  bindInstallBanner();
+  document.getElementById("header-avatar").addEventListener("click", ()=>{ screen="profile"; render(); });
+  document.getElementById("go-create-group").addEventListener("click", ()=>{ screen="createGroup"; render(); });
+  document.getElementById("go-join-group").addEventListener("click", ()=>{ screen="joinGroup"; render(); });
+  document.querySelectorAll(".group-card").forEach(card=>{
+    card.addEventListener("click", async ()=>{
+      activeGroupId = card.dataset.group;
+      activeView = "fil";
+      screen = "group";
+      render();
+      if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
+    });
+  });
+  bindBottomNav();
+}
+
+/* ===================== Bottom nav ===================== */
+function renderBottomNav(active){
+  return `
+    <div class="bottom-nav">
+      <button class="nav-btn ${active==='home'?'active':''}" data-nav="home"><span class="ic">🏠</span>Carnets</button>
+      <button class="nav-btn ${active==='profile'?'active':''}" data-nav="profile"><span class="ic">👤</span>Profil</button>
+    </div>
+  `;
+}
+function bindBottomNav(){
+  document.querySelectorAll(".nav-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      screen = btn.dataset.nav === "home" ? "home" : "profile";
+      render();
+    });
+  });
+}
+
+/* ===================== Profile ===================== */
+function renderProfileScreen(){
+  const groups = myGroups();
+  return `
+    <div class="app-header">
+      <h2>Mon profil</h2>
+      <span style="width:32px"></span>
+    </div>
+    <div class="screen">
+      <div class="profile-content">
+        <div class="profile-head">
+          <div class="avatar-lg" style="background:${currentUser.avatarColor}">${currentUser.displayName[0].toUpperCase()}</div>
+          <h3>${currentUser.displayName}</h3>
+          <span class="uname">@${currentUser.username}</span>
+        </div>
+        <p class="section-label">${groups.length} groupe${groups.length>1?"s":""}</p>
+        <div class="profile-list">
+          ${groups.map(g => `<div class="list-row" data-group="${g.id}"><span>📔</span> ${g.name}</div>`).join("")}
+          <div class="list-row" id="install-help-btn" style="margin-top:14px;"><span>📲</span> Comment installer l'appli ?</div>
+          <div class="list-row" id="logout-btn"><span>🚪</span> <span class="danger" style="color:var(--danger)">Se déconnecter</span></div>
+        </div>
+      </div>
+    </div>
+    ${renderBottomNav("profile")}
+  `;
+}
+function bindProfile(){
+  document.querySelectorAll(".profile-list [data-group]").forEach(row=>{
+    row.addEventListener("click", async ()=>{
+      activeGroupId = row.dataset.group;
+      activeView = "fil";
+      screen = "group";
+      render();
+      if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
+    });
+  });
+  document.getElementById("install-help-btn").addEventListener("click", ()=>{
+    modalType = "installHelp"; renderOverlay(); openOverlay();
+  });
+  document.getElementById("logout-btn").addEventListener("click", ()=>{
+    currentUser = null;
+    authMode = "login";
+    screen = "login";
+    render();
+  });
+  bindBottomNav();
+}
+
+/* ===================== Create group ===================== */
+function renderCreateGroupScreen(){
+  return `
+    <div class="app-header">
+      <button class="icon-btn" id="back-btn">←</button>
+      <h2>Nouveau groupe</h2>
+      <span style="width:34px"></span>
+    </div>
+    <div class="screen">
+      <div class="form-content">
+        <h3>Créer un carnet</h3>
+        <p class="hint">Donne un nom à ton groupe. Tu recevras un code à partager avec tes amis pour qu'ils te rejoignent.</p>
+        <div id="create-error"></div>
+        <div class="field">
+          <label>Nom du groupe</label>
+          <input type="text" id="group-name" placeholder="ex. Les 5 copains" />
+        </div>
+        <div class="field">
+          <label>Sous-titre (optionnel)</label>
+          <input type="text" id="group-subtitle" placeholder="ex. Copains d'enfance" />
+        </div>
+        <button class="btn-primary" id="create-submit">Créer le groupe</button>
+      </div>
+    </div>
+  `;
+}
+function bindCreateGroup(){
+  document.getElementById("back-btn").addEventListener("click", ()=>{ screen="home"; render(); });
+  document.getElementById("create-submit").addEventListener("click", async ()=>{
+    const errBox = document.getElementById("create-error");
+    const name = document.getElementById("group-name").value.trim();
+    const subtitle = document.getElementById("group-subtitle").value.trim();
+    if(!name){ errBox.innerHTML = `<p class="form-error">Donne un nom à ton groupe.</p>`; return; }
+    const g = { id: uid("g"), name, subtitle: subtitle || "", memberUsernames:[currentUser.username], joinCode: genCode(), createdBy: currentUser.username };
+    groupsData.push(g);
+    await saveGroupsList();
+    postsCache[g.id] = [];
+    await saveGroupPosts(g.id);
+    activeGroupId = g.id;
+    activeView = "fil";
+    screen = "group";
+    render();
+    modalType = "invite";
+    renderOverlay();
+    openOverlay();
+  });
+}
+
+/* ===================== Join group ===================== */
+function renderJoinGroupScreen(){
+  return `
+    <div class="app-header">
+      <button class="icon-btn" id="back-btn">←</button>
+      <h2>Rejoindre un groupe</h2>
+      <span style="width:34px"></span>
+    </div>
+    <div class="screen">
+      <div class="form-content">
+        <h3>Entre le code</h3>
+        <p class="hint">Demande le code d'invitation à 6 caractères à la personne qui a créé le groupe.</p>
+        <div id="join-error"></div>
+        <div class="field">
+          <label>Code d'invitation</label>
+          <input type="text" id="join-code" maxlength="6" placeholder="ex. K7T2QP" style="text-transform:uppercase; letter-spacing:2px;" />
+        </div>
+        <button class="btn-primary" id="join-submit">Rejoindre</button>
+      </div>
+    </div>
+  `;
+}
+function bindJoinGroup(){
+  document.getElementById("back-btn").addEventListener("click", ()=>{ screen="home"; render(); });
+  document.getElementById("join-submit").addEventListener("click", async ()=>{
+    const errBox = document.getElementById("join-error");
+    const code = document.getElementById("join-code").value.trim().toUpperCase();
+    const g = groupsData.find(gr => gr.joinCode === code);
+    if(!g){ errBox.innerHTML = `<p class="form-error">Ce code ne correspond à aucun groupe.</p>`; return; }
+    if(!g.memberUsernames.includes(currentUser.username)){
+      g.memberUsernames.push(currentUser.username);
+      await saveGroupsList();
+    }
+    activeGroupId = g.id;
+    activeView = "fil";
+    screen = "group";
+    render();
+    if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
+    showToast(`Bienvenue dans ${g.name} 🎉`);
+  });
+}
+
+/* ===================== Group screen ===================== */
+function renderGroupScreen(){
+  const group = getGroup(activeGroupId);
+  if(!group){ screen="home"; return renderHomeScreen(); }
+  const posts = postsCache[group.id];
+  return `
+    <div class="app-header">
+      <button class="icon-btn" id="back-btn">←</button>
+      <h2>${group.name}</h2>
+      <button class="icon-btn" id="invite-btn" title="Inviter">🔑</button>
+      <button class="icon-btn" id="book-btn" title="Livre de l'année">📖</button>
+    </div>
+    <div class="segmented">
+      <button class="seg-btn ${activeView==='fil'?'active':''}" data-view="fil">Fil</button>
+      <button class="seg-btn ${activeView==='calendrier'?'active':''}" data-view="calendrier">Calendrier</button>
+    </div>
+    <div class="screen">
+      <div class="group-content" id="group-content">
+        ${posts === undefined ? `<div class="spinner" style="margin:40px auto;"></div>` : renderGroupBody(group, posts)}
+      </div>
+    </div>
+    <button class="fab" id="fab-add">+</button>
+  `;
+}
+function renderGroupBody(group, posts){
+  if(activeView === "livre") return renderBook(group, posts);
+  if(activeView === "calendrier") return renderCalendar(group, posts);
+  return renderFeed(group, posts);
+}
+function renderFeed(group, posts){
+  const sorted = [...posts].sort((a,b)=> b.date.localeCompare(a.date));
+  return `
+    <div class="refresh-row"><button class="refresh-btn" id="refresh-btn">🔄 Actualiser</button></div>
+    ${sorted.length === 0 ? `
+      <div class="empty-state">
+        <span class="big-emoji">📸</span>
+        Aucune photo pour l'instant.<br/>Appuie sur + pour partager le premier moment.
+      </div>
+    ` : `
+      <div class="feed">
+        ${sorted.map(p => `
+          <article class="post-card" data-post="${p.id}">
+            <div class="post-head">
+              <span class="avatar-lg" style="width:28px;height:28px;font-size:12px;background:${authorColor(p.authorUsername)}">${p.authorName[0].toUpperCase()}</span>
+              <span class="name">${p.authorName}</span>
+              <span class="date">${formatDateShort(p.date)}</span>
+            </div>
+            <img class="post-img" src="${p.photo}" alt="" loading="lazy"/>
+            <div class="post-body">
+              <p class="post-caption">${escapeHtml(p.caption)}</p>
+              <div class="post-foot">
+                ${Object.entries(p.reactions).filter(([,c])=>c>0).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
+                <span>💬 ${p.comments.length}</span>
+                ${p.favorite ? `<span>⭐ dans le livre</span>` : ""}
+              </div>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    `}
+  `;
+}
+function authorColor(username){
+  const u = users.find(x => x.username === username);
+  return u ? u.avatarColor : "#4C7A6C";
+}
+function escapeHtml(s){
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* Calendar */
+function daysInMonth(year, m){ return new Date(year, m+1, 0).getDate(); }
+function firstWeekdayMon(year, m){ const d = new Date(year, m, 1).getDay(); return (d+6)%7; }
+function renderCalendar(group, posts){
+  const year = new Date().getFullYear();
+  const byDate = {};
+  posts.forEach(p => { byDate[p.date] = p; });
+  const monthsHtml = MONTHS_FR.map((mName, mIdx) => {
+    const leading = firstWeekdayMon(year, mIdx);
+    const total = daysInMonth(year, mIdx);
+    let cells = "";
+    for(let i=0;i<leading;i++){ cells += `<div class="day-cell empty"></div>`; }
+    for(let d=1; d<=total; d++){
+      const dateStr = `${year}-${String(mIdx+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const post = byDate[dateStr];
+      if(post){
+        cells += `<div class="day-cell has-photo" data-post="${post.id}" style="background-image:url('${post.photo}')"></div>`;
+      } else {
+        cells += `<div class="day-cell"></div>`;
+      }
+    }
+    return `<div class="month-block"><div class="month-title">${mName}</div><div class="day-grid">${cells}</div></div>`;
+  }).join("");
+  return `
+    <div class="year-header">
+      <h3>L'année en instants</h3>
+      <span>${year} · ${posts.length} moment${posts.length>1?"s":""} capturé${posts.length>1?"s":""}</span>
+    </div>
+    <div class="months-grid">${monthsHtml}</div>
+    <div class="cal-legend"><span class="sw" style="background:var(--gold-soft)"></span> jour partagé — appuie pour l'ouvrir</div>
+  `;
+}
+
+/* Book */
+function renderBook(group, posts){
+  const favorites = posts.filter(p => p.favorite);
+  return `
+    <div class="book-intro">
+      <h3 style="font-family:'Fraunces',serif; font-size:19px; margin:0 0 8px;">Le livre de ${group.name}</h3>
+      <p>Marquez vos photos préférées avec ⭐ tout au long de l'année : elles atterrissent ici, prêtes pour le livre imprimé envoyé à chaque membre en fin d'année.</p>
+    </div>
+    ${favorites.length === 0 ? `
+      <div class="empty-state"><span class="big-emoji">⭐</span>Aucune photo sélectionnée pour l'instant.<br/>Ouvre une photo dans le fil pour la marquer.</div>
+    ` : `
+      <div class="book-spread">
+        <div class="book-grid">
+          ${favorites.map(p => `<div class="book-photo"><img src="${p.photo}" alt=""/><div class="cap">${formatDateShort(p.date)} · ${p.authorName}</div></div>`).join("")}
+        </div>
+        <div class="book-actions">
+          <button class="btn-primary" id="order-book">Commander le livre</button>
+          <span class="book-price">${favorites.length} photo${favorites.length>1?"s":""} sélectionnée${favorites.length>1?"s":""}</span>
+        </div>
+      </div>
+    `}
+  `;
+}
+
+function bindGroupScreen(){
+  document.getElementById("back-btn").addEventListener("click", ()=>{ screen="home"; render(); });
+  document.getElementById("invite-btn").addEventListener("click", ()=>{ modalType="invite"; renderOverlay(); openOverlay(); });
+  document.getElementById("book-btn").addEventListener("click", ()=>{ activeView="livre"; renderGroupContentOnly(); });
+  document.querySelectorAll(".seg-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      activeView = btn.dataset.view;
+      document.querySelectorAll(".seg-btn").forEach(b=>b.classList.toggle("active", b===btn));
+      renderGroupContentOnly();
+    });
+  });
+  document.getElementById("fab-add").addEventListener("click", ()=>{
+    newPostPhoto = null; newPostFavorite = false;
+    modalType = "addPost"; renderOverlay(); openOverlay();
+  });
+  attachContentHandlers();
+}
+function renderGroupContentOnly(){
+  const group = getGroup(activeGroupId);
+  const posts = postsCache[group.id];
+  document.getElementById("group-content").innerHTML = posts === undefined
+    ? `<div class="spinner" style="margin:40px auto;"></div>`
+    : renderGroupBody(group, posts);
+  attachContentHandlers();
+}
+function attachContentHandlers(){
+  const refreshBtn = document.getElementById("refresh-btn");
+  if(refreshBtn){ refreshBtn.addEventListener("click", async ()=>{
+    await loadGroupPosts(activeGroupId);
+    renderGroupContentOnly();
+    showToast("Fil actualisé");
+  }); }
+  const orderBtn = document.getElementById("order-book");
+  if(orderBtn){ orderBtn.addEventListener("click", ()=> showToast("Commande envoyée — le livre sera imprimé et posté à chaque membre 📖")); }
+  document.querySelectorAll("[data-post]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      activeModalPostId = el.dataset.post;
+      modalType = "postDetail";
+      renderOverlay();
+      openOverlay();
+    });
+  });
+}
+
+/* ===================== Overlay / modal ===================== */
+function openOverlay(){ document.getElementById("overlay").classList.add("open"); }
+function closeOverlay(){ document.getElementById("overlay").classList.remove("open"); modalType = null; }
+document.getElementById("overlay").addEventListener("click", (e)=>{ if(e.target.id === "overlay") closeOverlay(); });
+
+function renderOverlay(){
+  const sheet = document.getElementById("modal-sheet");
+  if(modalType === "postDetail") { sheet.innerHTML = renderPostDetailSheet(); bindPostDetailSheet(); }
+  else if(modalType === "addPost") { sheet.innerHTML = renderAddPostSheet(); bindAddPostSheet(); }
+  else if(modalType === "invite") { sheet.innerHTML = renderInviteSheet(); bindInviteSheet(); }
+  else if(modalType === "installHelp") { sheet.innerHTML = renderInstallHelpSheet(); bindInstallHelpSheet(); }
+}
+
+function renderInstallHelpSheet(){
+  return `
+    <div class="sheet-head">
+      <h4>Installer Instants</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-block" style="padding-top:16px;">
+        <p class="section-label">Sur iPhone (Safari)</p>
+        <p style="font-size:13.5px; line-height:1.7; color:var(--ink); margin:0 0 20px;">
+          1. Ouvre le lien dans <strong>Safari</strong> (pas Chrome, pas une appli de messagerie)<br/>
+          2. Appuie sur l'icône de partage (le carré avec la flèche vers le haut)<br/>
+          3. Fais défiler et appuie sur <strong>"Sur l'écran d'accueil"</strong><br/>
+          4. Appuie sur "Ajouter" en haut à droite
+        </p>
+        <p class="section-label">Sur Android (Chrome)</p>
+        <p style="font-size:13.5px; line-height:1.7; color:var(--ink); margin:0;">
+          1. Ouvre le lien dans <strong>Chrome</strong><br/>
+          2. Appuie sur le menu ⋮ en haut à droite<br/>
+          3. Appuie sur <strong>"Installer l'application"</strong> ou "Ajouter à l'écran d'accueil"<br/>
+          4. Confirme — l'icône apparaît directement sur ton téléphone
+        </p>
+      </div>
+    </div>
+  `;
+}
+function bindInstallHelpSheet(){
+  document.getElementById("close-sheet").addEventListener("click", closeOverlay);
+}
+
+function renderPostDetailSheet(){
+  const group = getGroup(activeGroupId);
+  const posts = postsCache[group.id];
+  const post = posts.find(p => p.id === activeModalPostId);
+  if(!post) return "";
+  return `
+    <div class="sheet-head">
+      <span class="avatar-lg" style="width:30px;height:30px;font-size:12px;background:${authorColor(post.authorUsername)}">${post.authorName[0].toUpperCase()}</span>
+      <h4>${post.authorName} · ${formatDateShort(post.date)}</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="modal-img-wrap"><img src="${post.photo}" alt=""/></div>
+      <div class="modal-caption">${escapeHtml(post.caption)}</div>
+      <div class="modal-reactions">
+        ${REACTION_SET.map(e => `<button class="react-btn" data-emoji="${e}">${e} ${post.reactions[e] || ""}</button>`).join("")}
+        <button class="react-btn" id="fav-toggle">${post.favorite ? "⭐ Dans le livre" : "☆ Ajouter au livre"}</button>
+      </div>
+      <div class="modal-comments" id="modal-comments">
+        ${post.comments.map(c => `<div class="comment"><span class="cname">${c.author}</span>${escapeHtml(c.text)}</div>`).join("") || `<div class="comment" style="color:var(--ink-soft)">Aucun commentaire pour l'instant.</div>`}
+        <div class="replies-row">
+          ${post.replies.map(r => `<img class="reply-thumb" src="${r.img}" title="${r.author}"/>`).join("")}
+          <button class="reply-add" id="reply-add-btn">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <input type="text" id="comment-input" placeholder="Écrire un commentaire…" />
+      <button class="send-btn" id="comment-send">Envoyer</button>
+    </div>
+  `;
+}
+function bindPostDetailSheet(){
+  const group = getGroup(activeGroupId);
+  const posts = postsCache[group.id];
+  const post = posts.find(p => p.id === activeModalPostId);
+  document.getElementById("close-sheet").addEventListener("click", closeOverlay);
+  document.querySelectorAll(".react-btn[data-emoji]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const emoji = btn.dataset.emoji;
+      post.reactions[emoji] = (post.reactions[emoji] || 0) + 1;
+      await saveGroupPosts(group.id);
+      renderOverlay(); bindPostDetailSheet();
+      renderGroupContentOnly();
+    });
+  });
+  document.getElementById("fav-toggle").addEventListener("click", async ()=>{
+    post.favorite = !post.favorite;
+    await saveGroupPosts(group.id);
+    renderOverlay(); bindPostDetailSheet();
+    renderGroupContentOnly();
+  });
+  document.getElementById("reply-add-btn").addEventListener("click", ()=>{
+    pendingReplyPostId = post.id;
+    document.getElementById("reply-file").click();
+  });
+  const sendBtn = document.getElementById("comment-send");
+  const input = document.getElementById("comment-input");
+  async function submitComment(){
+    const val = input.value.trim();
+    if(!val) return;
+    post.comments.push({ author: currentUser.displayName, text: val });
+    await saveGroupPosts(group.id);
+    input.value = "";
+    renderOverlay(); bindPostDetailSheet();
+    renderGroupContentOnly();
+  }
+  sendBtn.addEventListener("click", submitComment);
+  input.addEventListener("keydown", (e)=>{ if(e.key === "Enter") submitComment(); });
+}
+document.getElementById("reply-file").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  if(!file || !pendingReplyPostId) return;
+  const dataUrl = await compressImage(file);
+  const group = getGroup(activeGroupId);
+  const posts = postsCache[group.id];
+  const post = posts.find(p => p.id === pendingReplyPostId);
+  post.replies.push({ author: currentUser.displayName, img: dataUrl });
+  await saveGroupPosts(group.id);
+  e.target.value = "";
+  renderOverlay(); bindPostDetailSheet();
+  showToast("Photo ajoutée en réponse 📸");
+});
+
+function renderAddPostSheet(){
+  return `
+    <div class="sheet-head">
+      <h4>Nouveau moment</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="upload-zone ${newPostPhoto ? 'has-img':''}" id="upload-zone">
+        ${newPostPhoto ? `<img src="${newPostPhoto}" alt=""/>` : `<span>📷</span><br/>Appuie pour prendre ou choisir une photo`}
+      </div>
+      <div class="form-block">
+        <div class="field">
+          <label>Légende</label>
+          <input type="text" id="post-caption" placeholder="Raconte ce moment…" />
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="post-favorite" ${newPostFavorite?'checked':''}/> ⭐ Ajouter à la sélection du livre de l'année
+        </label>
+        <button class="btn-primary" id="publish-post" ${newPostPhoto ? "" : "disabled"}>Publier</button>
+      </div>
+    </div>
+  `;
+}
+function bindAddPostSheet(){
+  document.getElementById("close-sheet").addEventListener("click", closeOverlay);
+  document.getElementById("upload-zone").addEventListener("click", ()=> document.getElementById("hidden-file").click());
+  const favCheck = document.getElementById("post-favorite");
+  favCheck.addEventListener("change", ()=>{ newPostFavorite = favCheck.checked; });
+  document.getElementById("publish-post").addEventListener("click", async ()=>{
+    if(!newPostPhoto) return;
+    const caption = document.getElementById("post-caption").value.trim();
+    const group = getGroup(activeGroupId);
+    const post = {
+      id: uid("p"), date: todayISO(),
+      authorUsername: currentUser.username, authorName: currentUser.displayName,
+      caption: caption || "…", photo: newPostPhoto, favorite: newPostFavorite,
+      reactions:{}, comments:[], replies:[]
+    };
+    postsCache[group.id].push(post);
+    await saveGroupPosts(group.id);
+    closeOverlay();
+    renderGroupContentOnly();
+    showToast("Photo publiée 🎉");
+  });
+}
+document.getElementById("hidden-file").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  newPostPhoto = await compressImage(file);
+  e.target.value = "";
+  if(modalType === "addPost"){ renderOverlay(); bindAddPostSheet(); }
+});
+
+function inviteLink(group){
+  return window.location.origin + window.location.pathname + "?code=" + group.joinCode;
+}
+function renderInviteSheet(){
+  const group = getGroup(activeGroupId);
+  return `
+    <div class="sheet-head">
+      <h4>Inviter dans ${group.name}</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      <p style="padding:16px 18px 0; font-size:13.5px; color:var(--ink-soft); line-height:1.5;">Le plus simple : envoie le lien ci-dessous par SMS ou WhatsApp. Tes amis appuient dessus, créent leur compte, et rejoignent le groupe automatiquement — sans rien taper.</p>
+      <div class="form-block" style="padding-top:16px;">
+        <button class="btn-primary" id="share-link">🔗 Partager le lien d'invitation</button>
+        <p class="section-label" style="margin-top:22px;">Ou avec le code</p>
+        <div class="invite-code" style="margin:0; padding:16px;">${group.joinCode}</div>
+        <button class="btn-secondary" id="copy-code" style="margin-top:10px;">Copier juste le code</button>
+      </div>
+    </div>
+  `;
+}
+function bindInviteSheet(){
+  document.getElementById("close-sheet").addEventListener("click", closeOverlay);
+  const group = getGroup(activeGroupId);
+  document.getElementById("share-link").addEventListener("click", async ()=>{
+    const link = inviteLink(group);
+    if(navigator.share){
+      try{ await navigator.share({ title: "Rejoins " + group.name + " sur Instants", url: link }); }
+      catch(e){ /* user cancelled share, no-op */ }
+    } else {
+      try{ await navigator.clipboard.writeText(link); showToast("Lien copié !"); }
+      catch(e){ showToast("Lien : " + link); }
+    }
+  });
+  document.getElementById("copy-code").addEventListener("click", async ()=>{
+    try{ await navigator.clipboard.writeText(group.joinCode); showToast("Code copié !"); }
+    catch(e){ showToast("Code : " + group.joinCode); }
+  });
+}
+
+document.addEventListener("keydown", (e)=>{ if(e.key === "Escape") closeOverlay(); });
+
+/* ===================== Init ===================== */
+init();
+</script>
+</body>
+</html>

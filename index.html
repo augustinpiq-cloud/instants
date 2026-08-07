@@ -102,6 +102,12 @@
   .btn-secondary:hover{ background:var(--line); }
   .btn-text{ all:unset; cursor:pointer; color:var(--teal); font-size:13px; font-weight:500; }
   .helper-text{ font-size:12px; color:var(--ink-soft); margin-top:14px; line-height:1.5; }
+  .avatar-upload-zone{
+    width:72px; height:72px; border-radius:50%; border:1.5px dashed var(--line);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    color:var(--ink-soft); font-size:11px; text-align:center; overflow:hidden; background:#fff;
+  }
+  .avatar-upload-zone img{ width:100%; height:100%; object-fit:cover; }
 
   /* ---------- Header ---------- */
   .app-header{
@@ -137,6 +143,11 @@
   .group-card .info{ min-width:0; flex:1; }
   .group-card .gname{ font-weight:600; font-size:15px; margin:0 0 2px; }
   .group-card .gmeta{ font-size:12px; color:var(--ink-soft); margin:0; }
+  .new-moments{
+    display:flex; align-items:center; gap:6px;
+    font-size:12px; font-weight:600; color:#2E6FE0; margin:5px 0 0;
+  }
+  .dot-badge{ width:8px; height:8px; border-radius:50%; background:#2E6FE0; flex-shrink:0; }
   .group-card .chev{ color:var(--ink-soft); flex-shrink:0; }
   .empty-state{
     text-align:center; padding:36px 20px; color:var(--ink-soft); font-size:14px; line-height:1.6;
@@ -213,6 +224,18 @@
   .profile-list{ display:flex; flex-direction:column; gap:8px; margin-top:8px; }
   .list-row{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; cursor:pointer; font-size:14px; }
   .list-row.danger{ color:var(--danger); }
+  .my-photos-grid{
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-top:4px;
+  }
+  .my-photo-cell{
+    position:relative; aspect-ratio:1/1; border-radius:8px; overflow:hidden; cursor:pointer;
+  }
+  .my-photo-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .my-photo-cell .mp-overlay{
+    position:absolute; bottom:0; left:0; right:0;
+    background:linear-gradient(180deg, transparent, rgba(30,42,34,0.8));
+    color:#fff; font-size:9.5px; padding:16px 6px 5px; display:flex; flex-direction:column; gap:1px;
+  }
 
   /* ---------- Forms (create/join group) ---------- */
   .form-content{ padding:22px 20px 40px; }
@@ -247,6 +270,7 @@
   .modal-reactions{ display:flex; gap:8px; padding:11px 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
   .react-btn{ all:unset; cursor:pointer; display:inline-flex; align-items:center; gap:5px; background:var(--paper-dim); border-radius:20px; padding:5px 11px; font-size:13px; }
   .react-btn:hover{ background:var(--gold-soft); }
+  .react-btn.active-reaction{ background:var(--gold); color:var(--pine-deep); font-weight:600; }
   .modal-comments{ padding:12px 18px; display:flex; flex-direction:column; gap:11px; }
   .comment{ font-size:13.5px; line-height:1.5; }
   .comment .cname{ font-weight:600; margin-right:5px; }
@@ -307,6 +331,7 @@
 <div class="toast" id="toast"></div>
 <input type="file" id="hidden-file" accept="image/*" style="display:none" />
 <input type="file" id="reply-file" accept="image/*" style="display:none" />
+<input type="file" id="avatar-file" accept="image/*" style="display:none" />
 
 <script type="module">
 /* ===================== Supabase setup =====================
@@ -322,8 +347,23 @@
         alter table instants enable row level security;
         create policy "public access" on instants for all using (true) with check (true);
 
+        create table profiles (
+          id uuid references auth.users on delete cascade primary key,
+          display_name text,
+          avatar_color text,
+          avatar_photo text,
+          created_at timestamptz default now()
+        );
+        alter table profiles enable row level security;
+        create policy "profiles are viewable by everyone" on profiles for select using (true);
+        create policy "users can insert their own profile" on profiles for insert with check (auth.uid() = id);
+        create policy "users can update their own profile" on profiles for update using (auth.uid() = id);
+
    4. Go to "Project Settings" > "API". Copy the "Project URL" and the "anon public" key.
    5. Paste them below, replacing the two placeholders.
+   6. Go to "Authentication" > "URL Configuration". Set "Site URL" to your GitHub Pages link
+      (e.g. https://yourname.github.io/instants/) and add the same link under "Redirect URLs".
+      This is required for password-reset emails to send people back to the right place.
 */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -358,23 +398,26 @@ async function storSet(key, value, shared, retries){
 
 
 /* ===================== App state ===================== */
-let users = [];          // {username, displayName, avatarColor, pin}
-let groupsData = [];     // {id, name, subtitle, memberUsernames, joinCode, createdBy}
+let groupsData = [];     // {id, name, subtitle, memberUsernames, joinCode, createdBy} — memberUsernames now holds auth user ids
 let postsCache = {};     // groupId -> posts[]
-let currentUser = null;
-let screen = "loading";  // loading | login | home | profile | createGroup | joinGroup | group
-let authMode = "login";  // login | signup
+let currentUser = null;  // {id, email, displayName, avatarColor, avatarPhoto}
+let screen = "loading";  // loading | login | home | profile | createGroup | joinGroup | group | resetPassword
+let authMode = "login";  // login | signup | forgotPassword
 let selectedColor = "#4C7A6C";
 let activeGroupId = null;
 let activeView = "fil";
-let modalType = null;    // null | postDetail | addPost | invite
+let modalType = null;    // null | postDetail | addPost | invite | installHelp | editProfile
 let activeModalPostId = null;
 let pendingReplyPostId = null;
+let pendingAvatarTarget = null; // "signup" | "editProfile"
 let newPostPhoto = null; // dataURL
 let newPostFavorite = false;
 let pendingJoinCode = null;
 let installBannerDismissed = false;
 let deferredInstallPrompt = null;
+let seenMap = {}; // groupId -> number of posts seen at last visit, for this user
+let signupPhoto = null;  // optional avatar dataURL chosen during signup
+let editProfilePhoto = undefined; // undefined = unchanged, null = removed, dataURL = new photo, set when opening edit sheet
 
 const PALETTE = ["#4C7A6C","#A66B63","#C9A24C","#5C6FA6","#8A7CA8","#7A9E6E","#B08968"];
 const REACTION_SET = ["❤️","👏","😂","🔥"];
@@ -387,11 +430,6 @@ function genCode(){
   for(let i=0;i<6;i++){ c += chars[Math.floor(Math.random()*chars.length)]; }
   return c;
 }
-function slugUsername(name){ return name.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,""); }
-function findUserByName(name){
-  const slug = slugUsername(name);
-  return users.find(u => u.username === slug);
-}
 function formatDateFR(dateStr){
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" });
@@ -402,14 +440,22 @@ function formatDateShort(dateStr){
 }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 
+// At least 8 characters, one uppercase letter, one non-alphanumeric character.
+function isStrongPassword(pw){
+  return /^(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}$/.test(pw);
+}
+function isValidEmail(email){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 /* ===================== Image compression ===================== */
-function compressImage(file){
+function compressImage(file, maxDim){
+  if(maxDim === undefined) maxDim = 900;
   return new Promise((resolve, reject)=>{
     const reader = new FileReader();
     reader.onload = e => {
       const img = new Image();
       img.onload = () => {
-        const maxDim = 900;
         let { width, height } = img;
         if(width > height){ if(width > maxDim){ height = height*maxDim/width; width = maxDim; } }
         else{ if(height > maxDim){ width = width*maxDim/height; height = maxDim; } }
@@ -446,11 +492,23 @@ function showToast(msg){
 }
 
 /* ===================== Data loading ===================== */
-async function loadUsers(){ users = (await storGet("users-list", true)) || []; }
-async function saveUsers(){
-  const ok = await storSet("users-list", users, true);
-  if(!ok) showToast("⚠️ Sauvegarde du compte impossible pour l'instant — réessaie dans un instant.");
-  return ok;
+async function fetchProfile(userId){
+  try{
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+    if(error || !data) return null;
+    return { id: userId, displayName: data.display_name, avatarColor: data.avatar_color, avatarPhoto: data.avatar_photo };
+  }catch(e){ console.error("fetchProfile error", e); return null; }
+}
+async function upsertProfile(userId, fields){
+  try{
+    const row = { id: userId };
+    if(fields.displayName !== undefined) row.display_name = fields.displayName;
+    if(fields.avatarColor !== undefined) row.avatar_color = fields.avatarColor;
+    if(fields.avatarPhoto !== undefined) row.avatar_photo = fields.avatarPhoto;
+    const { error } = await supabase.from("profiles").upsert(row);
+    if(error){ console.error("upsertProfile error", error); return false; }
+    return true;
+  }catch(e){ console.error("upsertProfile error", e); return false; }
 }
 async function loadGroupsList(){ groupsData = (await storGet("groups-list", true)) || []; }
 async function saveGroupsList(){
@@ -464,12 +522,65 @@ async function saveGroupPosts(groupId){
   if(!ok) showToast("⚠️ Sauvegarde impossible pour l'instant — réessaie dans un instant.");
   return ok;
 }
+// Always re-fetches the latest saved posts before applying a change and saving.
+// Without this, two people posting/reacting around the same time could overwrite
+// each other's changes (whoever saved last would silently erase the other's post).
+async function mutatePosts(groupId, mutatorFn){
+  const latest = (await storGet("posts:"+groupId, true)) || [];
+  const updated = mutatorFn(latest) || latest;
+  postsCache[groupId] = updated;
+  const ok = await storSet("posts:"+groupId, updated, true);
+  if(!ok) showToast("⚠️ Sauvegarde impossible pour l'instant — réessaie dans un instant.");
+  return ok;
+}
 
 function myGroups(){
   if(!currentUser) return [];
-  return groupsData.filter(g => g.memberUsernames.includes(currentUser.username));
+  return groupsData.filter(g => g.memberUsernames.includes(currentUser.id));
 }
 function getGroup(id){ return groupsData.find(g => g.id === id); }
+
+/* ===================== Unseen moments + app badge ===================== */
+async function loadSeenMap(){
+  seenMap = (await storGet("seen:" + currentUser.id, false)) || {};
+}
+async function markGroupSeen(groupId){
+  const count = (postsCache[groupId] || []).length;
+  if(seenMap[groupId] !== count){
+    seenMap[groupId] = count;
+    await storSet("seen:" + currentUser.id, seenMap, false);
+  }
+}
+function unseenCountFor(groupId){
+  const total = (postsCache[groupId] || []).length;
+  const seen = seenMap[groupId] || 0;
+  return Math.max(0, total - seen);
+}
+function totalUnseenCount(){
+  return myGroups().reduce((sum, g) => sum + unseenCountFor(g.id), 0);
+}
+function updateAppBadge(){
+  if(!("setAppBadge" in navigator)) return;
+  const total = totalUnseenCount();
+  if(total > 0){ navigator.setAppBadge(total).catch(()=>{}); }
+  else { navigator.clearAppBadge().catch(()=>{}); }
+}
+async function ensureAllMyPostsLoaded(){
+  const groups = myGroups();
+  for(const g of groups){
+    if(!postsCache[g.id]){ await loadGroupPosts(g.id); }
+  }
+}
+// Refresh unseen counts whenever the app regains focus — the closest we can get
+// to "live" updates without a push-notification server (see note near setup).
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible" && currentUser){
+    ensureAllMyPostsLoaded().then(()=>{
+      updateAppBadge();
+      if(screen === "home"){ render(); }
+    });
+  }
+});
 
 /* ===================== Install banner (Add to Home Screen) ===================== */
 function isStandalone(){
@@ -524,25 +635,52 @@ function bindInstallBanner(){
 }
 
 /* ===================== Root render ===================== */
+let recoveryInProgress = false;
+supabase.auth.onAuthStateChange((event)=>{
+  if(event === "PASSWORD_RECOVERY"){
+    recoveryInProgress = true;
+    screen = "resetPassword";
+    render();
+  }
+});
+
 async function init(){
   const params = new URLSearchParams(window.location.search);
   const codeParam = params.get("code");
   if(codeParam){ pendingJoinCode = codeParam.trim().toUpperCase(); }
   screen = "loading";
   render();
-  await Promise.all([loadUsers(), loadGroupsList()]);
+  await loadGroupsList();
+
+  // Give the recovery-link listener a brief moment to fire before deciding the screen.
+  await new Promise(res => setTimeout(res, 300));
+  if(recoveryInProgress) return;
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if(session && session.user){
+    const profile = await fetchProfile(session.user.id);
+    currentUser = {
+      id: session.user.id, email: session.user.email,
+      displayName: (profile && profile.displayName) || session.user.email,
+      avatarColor: (profile && profile.avatarColor) || PALETTE[0],
+      avatarPhoto: (profile && profile.avatarPhoto) || null
+    };
+    await tryPendingJoin();
+    return;
+  }
   screen = "login";
   render();
 }
 
 async function tryPendingJoin(){
-  if(!pendingJoinCode){ screen = "home"; render(); return; }
+  await loadSeenMap();
+  if(!pendingJoinCode){ screen = "home"; render(); ensureAllMyPostsLoaded().then(()=>{ updateAppBadge(); if(screen==="home"){ render(); } }); return; }
   const code = pendingJoinCode;
   pendingJoinCode = null;
   const g = groupsData.find(gr => gr.joinCode === code);
   if(!g){ showToast("Le lien d'invitation n'est plus valide."); screen = "home"; render(); return; }
-  if(!g.memberUsernames.includes(currentUser.username)){
-    g.memberUsernames.push(currentUser.username);
+  if(!g.memberUsernames.includes(currentUser.id)){
+    g.memberUsernames.push(currentUser.id);
     await saveGroupsList();
   }
   activeGroupId = g.id;
@@ -550,6 +688,8 @@ async function tryPendingJoin(){
   screen = "group";
   render();
   if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
+  await markGroupSeen(activeGroupId);
+  updateAppBadge();
   showToast(`Bienvenue dans ${g.name} 🎉`);
 }
 
@@ -562,6 +702,7 @@ function render(){
   if(screen === "createGroup"){ shell.innerHTML = renderCreateGroupScreen(); bindCreateGroup(); return; }
   if(screen === "joinGroup"){ shell.innerHTML = renderJoinGroupScreen(); bindJoinGroup(); return; }
   if(screen === "group"){ shell.innerHTML = renderGroupScreen(); bindGroupScreen(); return; }
+  if(screen === "resetPassword"){ shell.innerHTML = renderResetPasswordScreen(); bindResetPasswordScreen(); return; }
 }
 
 /* ===================== Loading ===================== */
@@ -580,11 +721,12 @@ function renderLoading(){
 
 /* ===================== Auth ===================== */
 function renderAuth(){
+  if(authMode === "forgotPassword") return renderForgotPasswordScreen();
   return `
     <div class="screen">
       ${renderInstallBanner()}
-      <div class="center-screen" style="justify-content:flex-start; padding-top:64px;">
-        <div class="brand-block" style="margin-bottom:26px;">
+      <div class="center-screen" style="justify-content:flex-start; padding-top:56px;">
+        <div class="brand-block" style="margin-bottom:22px;">
           <span class="brand-mark"></span>
           <h1 class="brand-title">Instants</h1>
           <span class="brand-sub">Le carnet du groupe</span>
@@ -596,7 +738,6 @@ function renderAuth(){
           </div>
           ${authMode === "login" ? renderLoginForm() : renderSignupForm()}
           ${pendingJoinCode ? `<p class="helper-text" style="color:var(--teal);">🔑 Tu as été invité·e à rejoindre un groupe — connecte-toi ou crée un compte pour y accéder directement.</p>` : ""}
-          <p class="helper-text">Pas de mot de passe compliqué : juste ton prénom et un code à 4 chiffres, entre vous. Simple, pensé pour un petit groupe de confiance — pas pour des données sensibles.</p>
         </div>
       </div>
     </div>
@@ -606,14 +747,15 @@ function renderLoginForm(){
   return `
     <div id="auth-error"></div>
     <div class="field">
-      <label>Ton prénom</label>
-      <input type="text" id="login-name" placeholder="ex. Sarah" autocomplete="off" />
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="toi@exemple.com" autocomplete="username" />
     </div>
     <div class="field">
-      <label>Code à 4 chiffres</label>
-      <input type="password" inputmode="numeric" maxlength="4" id="login-pin" placeholder="••••" />
+      <label>Mot de passe</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
     </div>
     <button class="btn-primary" id="login-submit">Se connecter</button>
+    <button class="btn-text" id="forgot-password-link" style="margin-top:14px;">Mot de passe oublié ?</button>
   `;
 }
 function renderSignupForm(){
@@ -624,8 +766,16 @@ function renderSignupForm(){
       <input type="text" id="signup-name" placeholder="ex. Sarah" autocomplete="off" />
     </div>
     <div class="field">
-      <label>Choisis un code à 4 chiffres</label>
-      <input type="password" inputmode="numeric" maxlength="4" id="signup-pin" placeholder="••••" />
+      <label>Email</label>
+      <input type="email" id="signup-email" placeholder="toi@exemple.com" autocomplete="username" />
+    </div>
+    <div class="field">
+      <label>Mot de passe</label>
+      <input type="password" id="signup-password" placeholder="8 caractères min., 1 majuscule, 1 caractère spécial" autocomplete="new-password" />
+    </div>
+    <div class="field">
+      <label>Confirme le mot de passe</label>
+      <input type="password" id="signup-password-confirm" placeholder="••••••••" autocomplete="new-password" />
     </div>
     <div class="field">
       <label>Ta couleur</label>
@@ -633,8 +783,91 @@ function renderSignupForm(){
         ${PALETTE.map(c => `<span class="color-swatch ${c===selectedColor?'selected':''}" data-color="${c}" style="background:${c}"></span>`).join("")}
       </div>
     </div>
+    <div class="field">
+      <label>Photo de profil (facultatif)</label>
+      <div class="avatar-upload-zone" id="signup-avatar-zone">
+        ${signupPhoto ? `<img src="${signupPhoto}" alt=""/>` : `<span>📷 Ajouter</span>`}
+      </div>
+    </div>
     <button class="btn-primary" id="signup-submit">Créer mon compte</button>
+    <p class="helper-text">Un email de confirmation te sera envoyé — clique sur le lien avant de te connecter.</p>
   `;
+}
+function renderForgotPasswordScreen(){
+  return `
+    <div class="screen">
+      <div class="center-screen" style="justify-content:flex-start; padding-top:64px;">
+        <div class="brand-block" style="margin-bottom:26px;">
+          <span class="brand-mark"></span>
+          <h1 class="brand-title">Instants</h1>
+          <span class="brand-sub">Le carnet du groupe</span>
+        </div>
+        <div class="auth-card">
+          <h3 style="font-family:'Fraunces',serif; font-size:19px; margin:0 0 6px;">Mot de passe oublié</h3>
+          <p class="hint">Entre ton email, on t'envoie un lien pour choisir un nouveau mot de passe.</p>
+          <div id="auth-error"></div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="forgot-email" placeholder="toi@exemple.com" />
+          </div>
+          <button class="btn-primary" id="forgot-submit">Envoyer le lien</button>
+          <button class="btn-text" id="back-to-login" style="margin-top:14px;">← Retour à la connexion</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function renderResetPasswordScreen(){
+  return `
+    <div class="center-screen" style="justify-content:flex-start; padding-top:64px;">
+      <div class="brand-block" style="margin-bottom:26px;">
+        <span class="brand-mark"></span>
+        <h1 class="brand-title">Instants</h1>
+        <span class="brand-sub">Choisis un nouveau mot de passe</span>
+      </div>
+      <div class="auth-card">
+        <div id="auth-error"></div>
+        <div class="field">
+          <label>Nouveau mot de passe</label>
+          <input type="password" id="reset-password" placeholder="8 caractères min., 1 majuscule, 1 caractère spécial" autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label>Confirme le mot de passe</label>
+          <input type="password" id="reset-password-confirm" placeholder="••••••••" autocomplete="new-password" />
+        </div>
+        <button class="btn-primary" id="reset-submit">Enregistrer le nouveau mot de passe</button>
+      </div>
+    </div>
+  `;
+}
+function bindResetPasswordScreen(){
+  const errBox = document.getElementById("auth-error");
+  function setError(msg){ if(errBox) errBox.innerHTML = msg ? `<p class="form-error">${msg}</p>` : ""; }
+  document.getElementById("reset-submit").addEventListener("click", async (e)=>{
+    const btn = e.currentTarget;
+    const password = document.getElementById("reset-password").value;
+    const confirm = document.getElementById("reset-password-confirm").value;
+    if(!isStrongPassword(password)){ setError("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial."); return; }
+    if(password !== confirm){ setError("Les deux mots de passe ne correspondent pas."); return; }
+    btn.disabled = true; btn.textContent = "Enregistrement…";
+    const { error } = await supabase.auth.updateUser({ password });
+    btn.disabled = false; btn.textContent = "Enregistrer le nouveau mot de passe";
+    if(error){ setError("Impossible de changer le mot de passe pour l'instant."); return; }
+    showToast("Mot de passe mis à jour ✅");
+    const { data: { user } } = await supabase.auth.getUser();
+    if(user){
+      const profile = await fetchProfile(user.id);
+      currentUser = {
+        id: user.id, email: user.email,
+        displayName: (profile && profile.displayName) || user.email,
+        avatarColor: (profile && profile.avatarColor) || PALETTE[0],
+        avatarPhoto: (profile && profile.avatarPhoto) || null
+      };
+      await loadSeenMap();
+    }
+    screen = "home";
+    render();
+  });
 }
 function bindAuth(){
   bindInstallBanner();
@@ -642,35 +875,84 @@ function bindAuth(){
     tab.addEventListener("click", ()=>{ authMode = tab.dataset.mode; render(); });
   });
   const errBox = document.getElementById("auth-error");
-  function setError(msg){ errBox.innerHTML = msg ? `<p class="form-error">${msg}</p>` : ""; }
+  function setError(msg){ if(errBox) errBox.innerHTML = msg ? `<p class="form-error">${msg}</p>` : ""; }
+
+  if(authMode === "forgotPassword"){
+    document.getElementById("back-to-login").addEventListener("click", ()=>{ authMode = "login"; render(); });
+    document.getElementById("forgot-submit").addEventListener("click", async ()=>{
+      const email = document.getElementById("forgot-email").value.trim();
+      if(!isValidEmail(email)){ setError("Entre un email valide."); return; }
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname
+      });
+      if(error){ setError("Impossible d'envoyer l'email pour l'instant."); return; }
+      showToast("Email envoyé — vérifie ta boîte de réception 📬");
+      authMode = "login";
+      render();
+    });
+    return;
+  }
 
   if(authMode === "login"){
-    document.getElementById("login-submit").addEventListener("click", ()=>{
-      const name = document.getElementById("login-name").value.trim();
-      const pin = document.getElementById("login-pin").value.trim();
-      if(!name || !pin){ setError("Entre ton prénom et ton code."); return; }
-      const user = findUserByName(name);
-      if(!user || user.pin !== pin){ setError("Prénom ou code incorrect."); return; }
-      currentUser = user;
+    document.getElementById("forgot-password-link").addEventListener("click", ()=>{ authMode = "forgotPassword"; render(); });
+    document.getElementById("login-submit").addEventListener("click", async (e)=>{
+      const btn = e.currentTarget;
+      const email = document.getElementById("login-email").value.trim();
+      const password = document.getElementById("login-password").value;
+      if(!isValidEmail(email) || !password){ setError("Entre ton email et ton mot de passe."); return; }
+      btn.disabled = true; btn.textContent = "Connexion…";
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      btn.disabled = false; btn.textContent = "Se connecter";
+      if(error){ setError("Email ou mot de passe incorrect, ou compte non confirmé."); return; }
+      const profile = await fetchProfile(data.user.id);
+      currentUser = {
+        id: data.user.id, email: data.user.email,
+        displayName: (profile && profile.displayName) || email,
+        avatarColor: (profile && profile.avatarColor) || PALETTE[0],
+        avatarPhoto: (profile && profile.avatarPhoto) || null
+      };
       tryPendingJoin();
     });
   } else {
     document.querySelectorAll(".color-swatch").forEach(sw=>{
       sw.addEventListener("click", ()=>{ selectedColor = sw.dataset.color; render(); });
     });
-    document.getElementById("signup-submit").addEventListener("click", async ()=>{
+    document.getElementById("signup-avatar-zone").addEventListener("click", ()=>{
+      pendingAvatarTarget = "signup";
+      document.getElementById("avatar-file").click();
+    });
+    document.getElementById("signup-submit").addEventListener("click", async (e)=>{
+      const btn = e.currentTarget;
       const name = document.getElementById("signup-name").value.trim();
-      const pin = document.getElementById("signup-pin").value.trim();
+      const email = document.getElementById("signup-email").value.trim();
+      const password = document.getElementById("signup-password").value;
+      const confirm = document.getElementById("signup-password-confirm").value;
       if(!name){ setError("Entre ton prénom."); return; }
-      if(!/^[0-9]{4}$/.test(pin)){ setError("Le code doit contenir 4 chiffres."); return; }
-      const slug = slugUsername(name);
-      if(!slug){ setError("Prénom invalide."); return; }
-      if(users.find(u => u.username === slug)){ setError("Ce prénom est déjà pris — ajoute une initiale, par exemple."); return; }
-      const newUser = { username: slug, displayName: name, avatarColor: selectedColor, pin };
-      users.push(newUser);
-      await saveUsers();
-      currentUser = newUser;
-      tryPendingJoin();
+      if(!isValidEmail(email)){ setError("Entre un email valide."); return; }
+      if(!isStrongPassword(password)){ setError("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial."); return; }
+      if(password !== confirm){ setError("Les deux mots de passe ne correspondent pas."); return; }
+      btn.disabled = true; btn.textContent = "Création…";
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if(error){
+        btn.disabled = false; btn.textContent = "Créer mon compte";
+        setError(error.message.includes("registered") ? "Cet email est déjà utilisé." : "Impossible de créer le compte pour l'instant.");
+        return;
+      }
+      const userId = data.user && data.user.id;
+      if(userId){
+        await upsertProfile(userId, { displayName: name, avatarColor: selectedColor, avatarPhoto: signupPhoto || null });
+      }
+      btn.disabled = false; btn.textContent = "Créer mon compte";
+      if(data.session){
+        currentUser = { id: userId, email, displayName: name, avatarColor: selectedColor, avatarPhoto: signupPhoto || null };
+        signupPhoto = null;
+        tryPendingJoin();
+      } else {
+        showToast("Compte créé — vérifie ta boîte mail pour confirmer, puis connecte-toi 📬");
+        signupPhoto = null;
+        authMode = "login";
+        render();
+      }
     });
   }
 }
@@ -681,7 +963,7 @@ function renderHomeScreen(){
   return `
     <div class="app-header">
       <h2>Mes carnets</h2>
-      <span class="header-avatar" id="header-avatar" style="background:${currentUser.avatarColor}">${currentUser.displayName[0].toUpperCase()}</span>
+      <span class="header-avatar" id="header-avatar" style="${currentUser.avatarPhoto ? 'padding:0;overflow:hidden;' : 'background:'+currentUser.avatarColor}">${currentUser.avatarPhoto ? `<img src="${currentUser.avatarPhoto}" alt="" style="width:100%;height:100%;object-fit:cover;"/>` : currentUser.displayName[0].toUpperCase()}</span>
     </div>
     <div class="screen">
       ${renderInstallBanner()}
@@ -696,12 +978,14 @@ function renderHomeScreen(){
           ${groups.map(g => {
             const posts = postsCache[g.id] || [];
             const last = [...posts].sort((a,b)=> b.date.localeCompare(a.date))[0];
+            const unseen = unseenCountFor(g.id);
             return `
               <div class="group-card" data-group="${g.id}">
                 ${last ? `<img class="group-thumb" src="${last.photo}" alt=""/>` : `<div class="group-thumb placeholder">📷</div>`}
                 <div class="info">
                   <p class="gname">${g.name}</p>
                   <p class="gmeta">${g.memberUsernames.length} membre${g.memberUsernames.length>1?"s":""} · ${posts.length} moment${posts.length>1?"s":""}</p>
+                  ${unseen > 0 ? `<p class="new-moments"><span class="dot-badge"></span>${unseen} nouveau${unseen>1?"x":""} moment${unseen>1?"s":""}</p>` : ""}
                 </div>
                 <span class="chev">›</span>
               </div>
@@ -729,6 +1013,8 @@ function bindHome(){
       screen = "group";
       render();
       if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
+      await markGroupSeen(activeGroupId);
+      updateAppBadge();
     });
   });
   bindBottomNav();
@@ -753,6 +1039,58 @@ function bindBottomNav(){
 }
 
 /* ===================== Profile ===================== */
+function myAuthoredPosts(){
+  const result = [];
+  myGroups().forEach(g => {
+    const posts = postsCache[g.id];
+    if(posts){
+      posts.filter(p => p.authorUsername === currentUser.id)
+        .forEach(p => result.push({ post: p, groupId: g.id, groupName: g.name }));
+    }
+  });
+  result.sort((a,b) => b.post.date.localeCompare(a.post.date));
+  return result;
+}
+function allMyGroupsLoaded(){
+  return myGroups().every(g => postsCache[g.id] !== undefined);
+}
+function renderMyPhotosSection(){
+  if(!allMyGroupsLoaded()){
+    return `<div class="spinner" style="margin:20px auto;"></div>`;
+  }
+  const mine = myAuthoredPosts();
+  if(mine.length === 0){
+    return `<div class="empty-state" style="padding:20px 10px;"><span class="big-emoji">📷</span>Tu n'as encore rien publié.</div>`;
+  }
+  return `
+    <div class="my-photos-grid">
+      ${mine.map(({ post, groupId, groupName }) => {
+        const totalReactions = Object.keys(post.reactionsByUser || {}).length;
+        return `
+          <div class="my-photo-cell" data-group="${groupId}" data-post="${post.id}">
+            <img src="${post.photo}" alt=""/>
+            <div class="mp-overlay">
+              <span>${groupName}</span>
+              ${totalReactions > 0 ? `<span>${totalReactions} réaction${totalReactions>1?"s":""}</span>` : `<span>Aucune réaction</span>`}
+            </div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+function bindMyPhotosSection(){
+  document.querySelectorAll(".my-photo-cell").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      activeGroupId = el.dataset.group;
+      activeModalPostId = el.dataset.post;
+      modalType = "postDetail";
+      renderOverlay();
+      openOverlay();
+    });
+  });
+}
+
 function renderProfileScreen(){
   const groups = myGroups();
   return `
@@ -763,16 +1101,19 @@ function renderProfileScreen(){
     <div class="screen">
       <div class="profile-content">
         <div class="profile-head">
-          <div class="avatar-lg" style="background:${currentUser.avatarColor}">${currentUser.displayName[0].toUpperCase()}</div>
+          <div class="avatar-lg" style="${currentUser.avatarPhoto ? 'padding:0;overflow:hidden;' : 'background:'+currentUser.avatarColor}">${currentUser.avatarPhoto ? `<img src="${currentUser.avatarPhoto}" alt="" style="width:100%;height:100%;object-fit:cover;"/>` : currentUser.displayName[0].toUpperCase()}</div>
           <h3>${currentUser.displayName}</h3>
-          <span class="uname">@${currentUser.username}</span>
+          <span class="uname">${currentUser.email}</span>
         </div>
         <p class="section-label">${groups.length} groupe${groups.length>1?"s":""}</p>
         <div class="profile-list">
           ${groups.map(g => `<div class="list-row" data-group="${g.id}"><span>📔</span> ${g.name}</div>`).join("")}
-          <div class="list-row" id="install-help-btn" style="margin-top:14px;"><span>📲</span> Comment installer l'appli ?</div>
+          <div class="list-row" id="edit-profile-btn" style="margin-top:14px;"><span>✏️</span> Modifier mon profil</div>
+          <div class="list-row" id="install-help-btn"><span>📲</span> Comment installer l'appli ?</div>
           <div class="list-row" id="logout-btn"><span>🚪</span> <span class="danger" style="color:var(--danger)">Se déconnecter</span></div>
         </div>
+        <p class="section-label" style="margin-top:26px;">Mes photos</p>
+        <div id="my-photos-section">${renderMyPhotosSection()}</div>
       </div>
     </div>
     ${renderBottomNav("profile")}
@@ -786,18 +1127,36 @@ function bindProfile(){
       screen = "group";
       render();
       if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
+      await markGroupSeen(activeGroupId);
+      updateAppBadge();
     });
+  });
+  document.getElementById("edit-profile-btn").addEventListener("click", ()=>{
+    editProfilePhoto = undefined;
+    modalType = "editProfile"; renderOverlay(); openOverlay();
   });
   document.getElementById("install-help-btn").addEventListener("click", ()=>{
     modalType = "installHelp"; renderOverlay(); openOverlay();
   });
-  document.getElementById("logout-btn").addEventListener("click", ()=>{
+  document.getElementById("logout-btn").addEventListener("click", async ()=>{
+    if("clearAppBadge" in navigator){ navigator.clearAppBadge().catch(()=>{}); }
+    await supabase.auth.signOut();
     currentUser = null;
+    seenMap = {};
     authMode = "login";
     screen = "login";
     render();
   });
+  bindMyPhotosSection();
   bindBottomNav();
+  if(!allMyGroupsLoaded()){
+    ensureAllMyPostsLoaded().then(()=>{
+      if(screen === "profile"){
+        const section = document.getElementById("my-photos-section");
+        if(section){ section.innerHTML = renderMyPhotosSection(); bindMyPhotosSection(); }
+      }
+    });
+  }
 }
 
 /* ===================== Create group ===================== */
@@ -833,7 +1192,7 @@ function bindCreateGroup(){
     const name = document.getElementById("group-name").value.trim();
     const subtitle = document.getElementById("group-subtitle").value.trim();
     if(!name){ errBox.innerHTML = `<p class="form-error">Donne un nom à ton groupe.</p>`; return; }
-    const g = { id: uid("g"), name, subtitle: subtitle || "", memberUsernames:[currentUser.username], joinCode: genCode(), createdBy: currentUser.username };
+    const g = { id: uid("g"), name, subtitle: subtitle || "", memberUsernames:[currentUser.id], joinCode: genCode(), createdBy: currentUser.id };
     groupsData.push(g);
     await saveGroupsList();
     postsCache[g.id] = [];
@@ -877,8 +1236,8 @@ function bindJoinGroup(){
     const code = document.getElementById("join-code").value.trim().toUpperCase();
     const g = groupsData.find(gr => gr.joinCode === code);
     if(!g){ errBox.innerHTML = `<p class="form-error">Ce code ne correspond à aucun groupe.</p>`; return; }
-    if(!g.memberUsernames.includes(currentUser.username)){
-      g.memberUsernames.push(currentUser.username);
+    if(!g.memberUsernames.includes(currentUser.id)){
+      g.memberUsernames.push(currentUser.id);
       await saveGroupsList();
     }
     activeGroupId = g.id;
@@ -933,7 +1292,7 @@ function renderFeed(group, posts){
         ${sorted.map(p => `
           <article class="post-card" data-post="${p.id}">
             <div class="post-head">
-              <span class="avatar-lg" style="width:28px;height:28px;font-size:12px;background:${authorColor(p.authorUsername)}">${p.authorName[0].toUpperCase()}</span>
+              ${avatarHtml(p.authorName, p.authorAvatarColor, p.authorAvatarPhoto, "width:28px;height:28px;font-size:12px;")}
               <span class="name">${p.authorName}</span>
               <span class="date">${formatDateShort(p.date)}</span>
             </div>
@@ -941,7 +1300,7 @@ function renderFeed(group, posts){
             <div class="post-body">
               <p class="post-caption">${escapeHtml(p.caption)}</p>
               <div class="post-foot">
-                ${Object.entries(p.reactions).filter(([,c])=>c>0).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
+                ${Object.entries(reactionCounts(p)).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
                 <span>💬 ${p.comments.length}</span>
                 ${p.favorite ? `<span>⭐ dans le livre</span>` : ""}
               </div>
@@ -952,9 +1311,17 @@ function renderFeed(group, posts){
     `}
   `;
 }
-function authorColor(username){
-  const u = users.find(x => x.username === username);
-  return u ? u.avatarColor : "#4C7A6C";
+function avatarHtml(name, color, photo, sizeStyle){
+  const style = sizeStyle || "width:28px;height:28px;font-size:12px;";
+  if(photo){
+    return `<span class="avatar-lg" style="${style}padding:0; overflow:hidden;"><img src="${photo}" alt="" style="width:100%;height:100%;object-fit:cover;"/></span>`;
+  }
+  return `<span class="avatar-lg" style="${style}background:${color || '#4C7A6C'}">${(name || "?")[0].toUpperCase()}</span>`;
+}
+function reactionCounts(post){
+  const counts = {};
+  Object.values(post.reactionsByUser || {}).forEach(emoji => { counts[emoji] = (counts[emoji]||0) + 1; });
+  return counts;
 }
 function escapeHtml(s){
   const d = document.createElement("div");
@@ -1048,6 +1415,8 @@ function attachContentHandlers(){
   const refreshBtn = document.getElementById("refresh-btn");
   if(refreshBtn){ refreshBtn.addEventListener("click", async ()=>{
     await loadGroupPosts(activeGroupId);
+    await markGroupSeen(activeGroupId);
+    updateAppBadge();
     renderGroupContentOnly();
     showToast("Fil actualisé");
   }); }
@@ -1074,6 +1443,104 @@ function renderOverlay(){
   else if(modalType === "addPost") { sheet.innerHTML = renderAddPostSheet(); bindAddPostSheet(); }
   else if(modalType === "invite") { sheet.innerHTML = renderInviteSheet(); bindInviteSheet(); }
   else if(modalType === "installHelp") { sheet.innerHTML = renderInstallHelpSheet(); bindInstallHelpSheet(); }
+  else if(modalType === "editProfile") { sheet.innerHTML = renderEditProfileSheet(); bindEditProfileSheet(); }
+}
+
+function renderEditProfileSheet(){
+  const photo = editProfilePhoto !== undefined ? editProfilePhoto : currentUser.avatarPhoto;
+  return `
+    <div class="sheet-head">
+      <h4>Modifier mon profil</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-block" style="padding-top:16px;">
+        <div id="edit-profile-error"></div>
+        <div class="field" style="display:flex; align-items:center; gap:14px;">
+          <div class="avatar-upload-zone" id="edit-avatar-zone">
+            ${photo ? `<img src="${photo}" alt=""/>` : `<span>📷</span>`}
+          </div>
+          <button class="btn-text" id="remove-avatar-btn" style="${photo ? '' : 'display:none;'}">Retirer la photo</button>
+        </div>
+        <div class="field">
+          <label>Prénom</label>
+          <input type="text" id="edit-name" value="${escapeHtml(currentUser.displayName)}" />
+        </div>
+        <div class="field">
+          <label>Couleur</label>
+          <div class="color-picker" id="edit-color-picker">
+            ${PALETTE.map(c => `<span class="color-swatch ${c===selectedColor?'selected':''}" data-color="${c}" style="background:${c}"></span>`).join("")}
+          </div>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="edit-email" value="${escapeHtml(currentUser.email)}" />
+        </div>
+        <p class="helper-text" style="margin-top:-8px;">Changer l'email envoie un lien de confirmation à la nouvelle adresse.</p>
+        <div class="field">
+          <label>Nouveau mot de passe (laisser vide pour ne pas changer)</label>
+          <input type="password" id="edit-password" placeholder="8 caractères min., 1 majuscule, 1 caractère spécial" autocomplete="new-password" />
+        </div>
+        <button class="btn-primary" id="save-profile-btn">Enregistrer</button>
+      </div>
+    </div>
+  `;
+}
+function bindEditProfileSheet(){
+  selectedColor = currentUser.avatarColor;
+  document.getElementById("close-sheet").addEventListener("click", closeOverlay);
+  const errBox = document.getElementById("edit-profile-error");
+  function setError(msg){ errBox.innerHTML = msg ? `<p class="form-error">${msg}</p>` : ""; }
+
+  document.getElementById("edit-avatar-zone").addEventListener("click", ()=>{
+    pendingAvatarTarget = "editProfile";
+    document.getElementById("avatar-file").click();
+  });
+  const removeBtn = document.getElementById("remove-avatar-btn");
+  if(removeBtn){ removeBtn.addEventListener("click", ()=>{
+    editProfilePhoto = null;
+    renderOverlay(); bindEditProfileSheet();
+  }); }
+  document.querySelectorAll("#edit-color-picker .color-swatch").forEach(sw=>{
+    sw.addEventListener("click", ()=>{
+      selectedColor = sw.dataset.color;
+      renderOverlay(); bindEditProfileSheet();
+    });
+  });
+  document.getElementById("save-profile-btn").addEventListener("click", async (e)=>{
+    const btn = e.currentTarget;
+    const name = document.getElementById("edit-name").value.trim();
+    const email = document.getElementById("edit-email").value.trim();
+    const password = document.getElementById("edit-password").value;
+    if(!name){ setError("Entre ton prénom."); return; }
+    if(!isValidEmail(email)){ setError("Entre un email valide."); return; }
+    if(password && !isStrongPassword(password)){ setError("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial."); return; }
+    btn.disabled = true; btn.textContent = "Enregistrement…";
+
+    const authUpdates = {};
+    if(email !== currentUser.email) authUpdates.email = email;
+    if(password) authUpdates.password = password;
+    if(Object.keys(authUpdates).length){
+      const { error } = await supabase.auth.updateUser(authUpdates);
+      if(error){
+        btn.disabled = false; btn.textContent = "Enregistrer";
+        setError("Impossible de mettre à jour l'email/mot de passe pour l'instant.");
+        return;
+      }
+    }
+    const finalPhoto = editProfilePhoto !== undefined ? editProfilePhoto : currentUser.avatarPhoto;
+    await upsertProfile(currentUser.id, { displayName: name, avatarColor: selectedColor, avatarPhoto: finalPhoto });
+    currentUser.displayName = name;
+    currentUser.avatarColor = selectedColor;
+    currentUser.avatarPhoto = finalPhoto;
+    if(authUpdates.email) showToast("Vérifie ta nouvelle boîte mail pour confirmer le changement d'adresse 📬");
+    else showToast("Profil mis à jour ✅");
+    editProfilePhoto = undefined;
+    btn.disabled = false; btn.textContent = "Enregistrer";
+    closeOverlay();
+    if(screen === "profile"){ render(); }
+    else if(screen === "home"){ render(); }
+  });
 }
 
 function renderInstallHelpSheet(){
@@ -1113,7 +1580,7 @@ function renderPostDetailSheet(){
   if(!post) return "";
   return `
     <div class="sheet-head">
-      <span class="avatar-lg" style="width:30px;height:30px;font-size:12px;background:${authorColor(post.authorUsername)}">${post.authorName[0].toUpperCase()}</span>
+      ${avatarHtml(post.authorName, post.authorAvatarColor, post.authorAvatarPhoto, "width:30px;height:30px;font-size:12px;")}
       <h4>${post.authorName} · ${formatDateShort(post.date)}</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
@@ -1121,7 +1588,11 @@ function renderPostDetailSheet(){
       <div class="modal-img-wrap"><img src="${post.photo}" alt=""/></div>
       <div class="modal-caption">${escapeHtml(post.caption)}</div>
       <div class="modal-reactions">
-        ${REACTION_SET.map(e => `<button class="react-btn" data-emoji="${e}">${e} ${post.reactions[e] || ""}</button>`).join("")}
+        ${REACTION_SET.map(e => {
+          const counts = reactionCounts(post);
+          const mine = (post.reactionsByUser || {})[currentUser.id] === e;
+          return `<button class="react-btn ${mine ? 'active-reaction':''}" data-emoji="${e}">${e} ${counts[e] || ""}</button>`;
+        }).join("")}
         <button class="react-btn" id="fav-toggle">${post.favorite ? "⭐ Dans le livre" : "☆ Ajouter au livre"}</button>
       </div>
       <div class="modal-comments" id="modal-comments">
@@ -1146,15 +1617,29 @@ function bindPostDetailSheet(){
   document.querySelectorAll(".react-btn[data-emoji]").forEach(btn=>{
     btn.addEventListener("click", async ()=>{
       const emoji = btn.dataset.emoji;
-      post.reactions[emoji] = (post.reactions[emoji] || 0) + 1;
-      await saveGroupPosts(group.id);
+      await mutatePosts(group.id, posts => {
+        const p = posts.find(x => x.id === activeModalPostId);
+        if(!p) return posts;
+        if(!p.reactionsByUser) p.reactionsByUser = {};
+        // One reaction per person: clicking the same emoji again removes it,
+        // clicking a different emoji replaces the previous choice.
+        if(p.reactionsByUser[currentUser.id] === emoji){
+          delete p.reactionsByUser[currentUser.id];
+        } else {
+          p.reactionsByUser[currentUser.id] = emoji;
+        }
+        return posts;
+      });
       renderOverlay(); bindPostDetailSheet();
       renderGroupContentOnly();
     });
   });
   document.getElementById("fav-toggle").addEventListener("click", async ()=>{
-    post.favorite = !post.favorite;
-    await saveGroupPosts(group.id);
+    await mutatePosts(group.id, posts => {
+      const p = posts.find(x => x.id === activeModalPostId);
+      if(p) p.favorite = !p.favorite;
+      return posts;
+    });
     renderOverlay(); bindPostDetailSheet();
     renderGroupContentOnly();
   });
@@ -1167,8 +1652,11 @@ function bindPostDetailSheet(){
   async function submitComment(){
     const val = input.value.trim();
     if(!val) return;
-    post.comments.push({ author: currentUser.displayName, text: val });
-    await saveGroupPosts(group.id);
+    await mutatePosts(group.id, posts => {
+      const p = posts.find(x => x.id === activeModalPostId);
+      if(p) p.comments.push({ author: currentUser.displayName, text: val });
+      return posts;
+    });
     input.value = "";
     renderOverlay(); bindPostDetailSheet();
     renderGroupContentOnly();
@@ -1181,13 +1669,29 @@ document.getElementById("reply-file").addEventListener("change", async (e)=>{
   if(!file || !pendingReplyPostId) return;
   const dataUrl = await compressImage(file);
   const group = getGroup(activeGroupId);
-  const posts = postsCache[group.id];
-  const post = posts.find(p => p.id === pendingReplyPostId);
-  post.replies.push({ author: currentUser.displayName, img: dataUrl });
-  await saveGroupPosts(group.id);
+  const replyToId = pendingReplyPostId;
+  await mutatePosts(group.id, posts => {
+    const p = posts.find(x => x.id === replyToId);
+    if(p) p.replies.push({ author: currentUser.displayName, img: dataUrl });
+    return posts;
+  });
   e.target.value = "";
   renderOverlay(); bindPostDetailSheet();
   showToast("Photo ajoutée en réponse 📸");
+});
+document.getElementById("avatar-file").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  e.target.value = "";
+  if(!file || !pendingAvatarTarget) return;
+  const dataUrl = await compressImage(file, 300);
+  if(pendingAvatarTarget === "signup"){
+    signupPhoto = dataUrl;
+    render();
+  } else if(pendingAvatarTarget === "editProfile"){
+    editProfilePhoto = dataUrl;
+    renderOverlay(); bindEditProfileSheet();
+  }
+  pendingAvatarTarget = null;
 });
 
 function renderAddPostSheet(){
@@ -1218,18 +1722,22 @@ function bindAddPostSheet(){
   document.getElementById("upload-zone").addEventListener("click", ()=> document.getElementById("hidden-file").click());
   const favCheck = document.getElementById("post-favorite");
   favCheck.addEventListener("change", ()=>{ newPostFavorite = favCheck.checked; });
-  document.getElementById("publish-post").addEventListener("click", async ()=>{
+  document.getElementById("publish-post").addEventListener("click", async (e)=>{
     if(!newPostPhoto) return;
+    const btn = e.currentTarget;
+    if(btn.disabled) return; // guard against double-tap submitting twice
+    btn.disabled = true;
+    btn.textContent = "Publication…";
     const caption = document.getElementById("post-caption").value.trim();
     const group = getGroup(activeGroupId);
     const post = {
       id: uid("p"), date: todayISO(),
-      authorUsername: currentUser.username, authorName: currentUser.displayName,
+      authorUsername: currentUser.id, authorName: currentUser.displayName,
+      authorAvatarColor: currentUser.avatarColor, authorAvatarPhoto: currentUser.avatarPhoto,
       caption: caption || "…", photo: newPostPhoto, favorite: newPostFavorite,
-      reactions:{}, comments:[], replies:[]
+      reactionsByUser:{}, comments:[], replies:[]
     };
-    postsCache[group.id].push(post);
-    await saveGroupPosts(group.id);
+    await mutatePosts(group.id, posts => { posts.push(post); return posts; });
     closeOverlay();
     renderGroupContentOnly();
     showToast("Photo publiée 🎉");

@@ -274,6 +274,15 @@
   .modal-comments{ padding:12px 18px; display:flex; flex-direction:column; gap:11px; }
   .comment{ font-size:13.5px; line-height:1.5; }
   .comment .cname{ font-weight:600; margin-right:5px; }
+  .edit-comment-btn{
+    all:unset; cursor:pointer; font-size:11px; margin-left:7px; opacity:0.6; vertical-align:middle;
+  }
+  .edit-comment-btn:hover{ opacity:1; }
+  .comment-edit-row{ display:flex; gap:8px; align-items:center; }
+  .comment-edit-row .edit-comment-input{
+    flex:1; border:1px solid var(--line); border-radius:16px; padding:6px 12px; font-size:13px; outline:none;
+  }
+  .comment-edit-row .save-comment-edit-btn{ all:unset; cursor:pointer; color:var(--teal); font-weight:600; font-size:13px; }
   .replies-row{ display:flex; gap:8px; margin-top:4px; flex-wrap:wrap; }
   .reply-thumb{ width:50px; height:50px; border-radius:8px; object-fit:cover; border:1px solid var(--line); }
   .reply-add{ width:50px; height:50px; border-radius:8px; border:1.5px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:18px; cursor:pointer; background:transparent; }
@@ -332,6 +341,7 @@
 <input type="file" id="hidden-file" accept="image/*" style="display:none" />
 <input type="file" id="reply-file" accept="image/*" style="display:none" />
 <input type="file" id="avatar-file" accept="image/*" style="display:none" />
+<input type="file" id="edit-photo-file" accept="image/*" style="display:none" />
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -368,6 +378,11 @@ let activeView = "fil";
 let modalType = null;    // null | postDetail | addPost | invite | installHelp | editProfile
 let activeModalPostId = null;
 let pendingReplyPostId = null;
+let commentSubmitting = false;
+let postEditMode = false;
+let editingCommentId = null;
+let editPostNewPhoto = null;
+let pendingEditPostId = null;
 let pendingAvatarTarget = null; // "signup" | "editProfile"
 let newPostPhoto = null; // dataURL
 let newPostFavorite = false;
@@ -396,6 +411,10 @@ function formatDateFR(dateStr){
 function formatDateShort(dateStr){
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("fr-FR", { day:"numeric", month:"short" });
+}
+function formatTime(isoTimestamp){
+  if(!isoTimestamp) return "";
+  return new Date(isoTimestamp).toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
 }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 
@@ -470,6 +489,30 @@ async function upsertProfile(userId, fields){
   }catch(e){ console.error("upsertProfile error", e); return false; }
 }
 
+// Builds the in-memory currentUser object for a logged-in auth user. If the
+// profiles row is missing — which can happen the very first time someone logs
+// in after confirming their email, since the profile couldn't be written at
+// signUp time while unauthenticated — it's recreated here from the signup
+// metadata that was safely stashed on the auth user itself, or from their
+// email as a last resort.
+async function buildCurrentUser(authUser){
+  let profile = await fetchProfile(authUser.id);
+  if(!profile){
+    const meta = authUser.user_metadata || {};
+    const displayName = meta.display_name || authUser.email.split("@")[0];
+    const avatarColor = meta.avatar_color || PALETTE[0];
+    const avatarPhoto = meta.avatar_photo || null;
+    await upsertProfile(authUser.id, { displayName, avatarColor, avatarPhoto });
+    profile = { displayName, avatarColor, avatarPhoto };
+  }
+  return {
+    id: authUser.id, email: authUser.email,
+    displayName: profile.displayName || authUser.email,
+    avatarColor: profile.avatarColor || PALETTE[0],
+    avatarPhoto: profile.avatarPhoto || null
+  };
+}
+
 // Groups the current user belongs to — the database itself only returns rows
 // this person is a real member of (enforced by Row Level Security), not the app.
 async function loadGroupsList(){
@@ -524,7 +567,7 @@ async function joinGroupByCodeInDb(code){
 // them into the same in-memory shape the rest of the app already expects.
 async function loadGroupPosts(groupId){
   try{
-    const { data: postsRows, error } = await sb.from("posts").select("*").eq("group_id", groupId).order("post_date", { ascending:false });
+    const { data: postsRows, error } = await sb.from("posts").select("*").eq("group_id", groupId).order("created_at", { ascending:false });
     if(error) throw error;
     const rows = postsRows || [];
     const postIds = rows.map(p => p.id);
@@ -538,12 +581,12 @@ async function loadGroupPosts(groupId){
       reactions = r1.data || []; comments = r2.data || []; replies = r3.data || [];
     }
     postsCache[groupId] = rows.map(p => ({
-      id: p.id, date: p.post_date,
+      id: p.id, date: p.post_date, createdAt: p.created_at,
       authorUsername: p.author_id, authorName: p.author_name,
       authorAvatarColor: p.author_avatar_color, authorAvatarPhoto: p.author_avatar_photo,
       caption: p.caption, photo: p.photo, favorite: p.favorite,
       reactionsByUser: Object.fromEntries(reactions.filter(r => r.post_id === p.id).map(r => [r.user_id, r.emoji])),
-      comments: comments.filter(c => c.post_id === p.id).map(c => ({ author: c.author_name, text: c.text })),
+      comments: comments.filter(c => c.post_id === p.id).map(c => ({ id: c.id, authorId: c.author_id, author: c.author_name, text: c.text })),
       replies: replies.filter(r => r.post_id === p.id).map(r => ({ author: r.author_name, img: r.img }))
     }));
   }catch(e){ console.error("loadGroupPosts error", e); postsCache[groupId] = []; }
@@ -563,6 +606,19 @@ async function setPostFavorite(postId, value){
   if(error){ console.error("setPostFavorite error", error); showToast("⚠️ Action impossible pour l'instant."); return false; }
   return true;
 }
+async function editPost(postId, fields){
+  const row = {};
+  if(fields.caption !== undefined) row.caption = fields.caption;
+  if(fields.photo !== undefined) row.photo = fields.photo;
+  const { error } = await sb.from("posts").update(row).eq("id", postId);
+  if(error){ console.error("editPost error", error); showToast("⚠️ Modification impossible pour l'instant."); return false; }
+  return true;
+}
+async function deletePost(postId){
+  const { error } = await sb.from("posts").delete().eq("id", postId);
+  if(error){ console.error("deletePost error", error); showToast("⚠️ Suppression impossible pour l'instant."); return false; }
+  return true;
+}
 async function setReaction(postId, emoji){
   try{
     const { data: existing } = await sb.from("reactions").select("emoji").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
@@ -577,6 +633,11 @@ async function setReaction(postId, emoji){
 async function insertComment(postId, text){
   const { error } = await sb.from("comments").insert({ post_id: postId, author_id: currentUser.id, author_name: currentUser.displayName, text });
   if(error){ console.error("insertComment error", error); showToast("⚠️ Commentaire impossible pour l'instant."); return false; }
+  return true;
+}
+async function editComment(commentId, text){
+  const { error } = await sb.from("comments").update({ text }).eq("id", commentId);
+  if(error){ console.error("editComment error", error); showToast("⚠️ Modification impossible pour l'instant."); return false; }
   return true;
 }
 async function insertReply(postId, img){
@@ -714,13 +775,7 @@ async function init(){
 
   const { data: { session } } = await sb.auth.getSession();
   if(session && session.user){
-    const profile = await fetchProfile(session.user.id);
-    currentUser = {
-      id: session.user.id, email: session.user.email,
-      displayName: (profile && profile.displayName) || session.user.email,
-      avatarColor: (profile && profile.avatarColor) || PALETTE[0],
-      avatarPhoto: (profile && profile.avatarPhoto) || null
-    };
+    currentUser = await buildCurrentUser(session.user);
     await tryPendingJoin();
     return;
   }
@@ -910,13 +965,7 @@ function bindResetPasswordScreen(){
     showToast("Mot de passe mis à jour ✅");
     const { data: { user } } = await sb.auth.getUser();
     if(user){
-      const profile = await fetchProfile(user.id);
-      currentUser = {
-        id: user.id, email: user.email,
-        displayName: (profile && profile.displayName) || user.email,
-        avatarColor: (profile && profile.avatarColor) || PALETTE[0],
-        avatarPhoto: (profile && profile.avatarPhoto) || null
-      };
+      currentUser = await buildCurrentUser(user);
       await loadSeenMap();
     }
     screen = "home";
@@ -962,13 +1011,7 @@ function bindAuth(){
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       btn.disabled = false; btn.textContent = "Se connecter";
       if(error){ setError("Email ou mot de passe incorrect, ou compte non confirmé."); return; }
-      const profile = await fetchProfile(data.user.id);
-      currentUser = {
-        id: data.user.id, email: data.user.email,
-        displayName: (profile && profile.displayName) || email,
-        avatarColor: (profile && profile.avatarColor) || PALETTE[0],
-        avatarPhoto: (profile && profile.avatarPhoto) || null
-      };
+      currentUser = await buildCurrentUser(data.user);
       tryPendingJoin();
     });
   } else {
@@ -990,7 +1033,10 @@ function bindAuth(){
       if(!isStrongPassword(password)){ setError("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial."); return; }
       if(password !== confirm){ setError("Les deux mots de passe ne correspondent pas."); return; }
       btn.disabled = true; btn.textContent = "Création…";
-      const { data, error } = await sb.auth.signUp({ email, password });
+      const { data, error } = await sb.auth.signUp({
+        email, password,
+        options: { data: { display_name: name, avatar_color: selectedColor, avatar_photo: signupPhoto || null } }
+      });
       if(error){
         btn.disabled = false; btn.textContent = "Créer mon compte";
         console.error("signUp error", error.status, error.message);
@@ -998,12 +1044,16 @@ function bindAuth(){
         return;
       }
       const userId = data.user && data.user.id;
-      if(userId){
+      // If a session exists immediately (e.g. email confirmation is off), write the
+      // profile now while authenticated. Otherwise it's created on first login instead,
+      // using the display_name/avatar_color/avatar_photo metadata stashed above —
+      // see buildCurrentUser().
+      if(userId && data.session){
         await upsertProfile(userId, { displayName: name, avatarColor: selectedColor, avatarPhoto: signupPhoto || null });
       }
       btn.disabled = false; btn.textContent = "Créer mon compte";
       if(data.session){
-        currentUser = { id: userId, email, displayName: name, avatarColor: selectedColor, avatarPhoto: signupPhoto || null };
+        currentUser = await buildCurrentUser(data.user);
         signupPhoto = null;
         tryPendingJoin();
       } else {
@@ -1143,6 +1193,7 @@ function bindMyPhotosSection(){
     el.addEventListener("click", ()=>{
       activeGroupId = el.dataset.group;
       activeModalPostId = el.dataset.post;
+      postEditMode = false; editingCommentId = null;
       modalType = "postDetail";
       renderOverlay();
       openOverlay();
@@ -1344,7 +1395,7 @@ function renderGroupBody(group, posts){
   return renderFeed(group, posts);
 }
 function renderFeed(group, posts){
-  const sorted = [...posts].sort((a,b)=> b.date.localeCompare(a.date));
+  const sorted = [...posts].sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
   return `
     <div class="refresh-row"><button class="refresh-btn" id="refresh-btn">🔄 Actualiser</button></div>
     ${sorted.length === 0 ? `
@@ -1359,7 +1410,7 @@ function renderFeed(group, posts){
             <div class="post-head">
               ${avatarHtml(p.authorName, p.authorAvatarColor, p.authorAvatarPhoto, "width:28px;height:28px;font-size:12px;")}
               <span class="name">${escapeHtml(p.authorName)}</span>
-              <span class="date">${formatDateShort(p.date)}</span>
+              <span class="date">${formatDateShort(p.date)} · ${formatTime(p.createdAt)}</span>
             </div>
             <img class="post-img" src="${p.photo}" alt="" loading="lazy"/>
             <div class="post-body">
@@ -1490,6 +1541,7 @@ function attachContentHandlers(){
   document.querySelectorAll("[data-post]").forEach(el=>{
     el.addEventListener("click", ()=>{
       activeModalPostId = el.dataset.post;
+      postEditMode = false; editingCommentId = null;
       modalType = "postDetail";
       renderOverlay();
       openOverlay();
@@ -1643,15 +1695,27 @@ function renderPostDetailSheet(){
   const posts = postsCache[group.id];
   const post = posts.find(p => p.id === activeModalPostId);
   if(!post) return "";
+  const isAuthor = post.authorUsername === currentUser.id;
   return `
     <div class="sheet-head">
       ${avatarHtml(post.authorName, post.authorAvatarColor, post.authorAvatarPhoto, "width:30px;height:30px;font-size:12px;")}
-      <h4>${escapeHtml(post.authorName)} · ${formatDateShort(post.date)}</h4>
+      <h4>${escapeHtml(post.authorName)} · ${formatDateShort(post.date)} · ${formatTime(post.createdAt)}</h4>
+      ${isAuthor ? `<button class="icon-btn" style="color:var(--ink)" id="edit-post-btn" title="Modifier">${postEditMode ? "✕" : "✏️"}</button>` : ""}
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
       <div class="modal-img-wrap"><img src="${post.photo}" alt=""/></div>
-      <div class="modal-caption">${escapeHtml(post.caption)}</div>
+      ${postEditMode ? `
+        <div class="form-block" style="padding-top:14px;">
+          <div class="field">
+            <label>Légende</label>
+            <input type="text" id="edit-caption-input" value="${escapeHtml(post.caption)}" />
+          </div>
+          <button class="btn-secondary" id="change-photo-btn" style="margin-bottom:10px;">📷 Changer la photo</button>
+          <button class="btn-primary" id="save-post-edit-btn" style="margin-bottom:10px;">Enregistrer</button>
+          <button class="btn-text" id="delete-post-btn" style="color:var(--danger);">🗑️ Supprimer cette photo</button>
+        </div>
+      ` : `<div class="modal-caption">${escapeHtml(post.caption)}</div>`}
       <div class="modal-reactions">
         ${REACTION_SET.map(e => {
           const counts = reactionCounts(post);
@@ -1661,7 +1725,23 @@ function renderPostDetailSheet(){
         <button class="react-btn" id="fav-toggle">${post.favorite ? "⭐ Dans le livre" : "☆ Ajouter au livre"}</button>
       </div>
       <div class="modal-comments" id="modal-comments">
-        ${post.comments.map(c => `<div class="comment"><span class="cname">${escapeHtml(c.author)}</span>${escapeHtml(c.text)}</div>`).join("") || `<div class="comment" style="color:var(--ink-soft)">Aucun commentaire pour l'instant.</div>`}
+        ${post.comments.map(c => {
+          const mine = c.authorId === currentUser.id;
+          if(editingCommentId === c.id){
+            return `
+              <div class="comment-edit-row" data-comment="${c.id}">
+                <input type="text" class="edit-comment-input" value="${escapeHtml(c.text)}" />
+                <button class="btn-text save-comment-edit-btn" data-comment="${c.id}">OK</button>
+              </div>
+            `;
+          }
+          return `
+            <div class="comment">
+              <span class="cname">${escapeHtml(c.author)}</span>${escapeHtml(c.text)}
+              ${mine ? `<button class="edit-comment-btn" data-comment="${c.id}" title="Modifier">✏️</button>` : ""}
+            </div>
+          `;
+        }).join("") || `<div class="comment" style="color:var(--ink-soft)">Aucun commentaire pour l'instant.</div>`}
         <div class="replies-row">
           ${post.replies.map(r => `<img class="reply-thumb" src="${r.img}" title="${escapeHtml(r.author)}"/>`).join("")}
           <button class="reply-add" id="reply-add-btn">+</button>
@@ -1698,20 +1778,98 @@ function bindPostDetailSheet(){
     pendingReplyPostId = post.id;
     document.getElementById("reply-file").click();
   });
+
+  // Author-only: edit caption/photo, or delete the post entirely.
+  const editBtn = document.getElementById("edit-post-btn");
+  if(editBtn){
+    editBtn.addEventListener("click", ()=>{
+      postEditMode = !postEditMode;
+      editPostNewPhoto = null;
+      renderOverlay(); bindPostDetailSheet();
+    });
+  }
+  const changePhotoBtn = document.getElementById("change-photo-btn");
+  if(changePhotoBtn){
+    changePhotoBtn.addEventListener("click", ()=>{
+      pendingEditPostId = post.id;
+      document.getElementById("edit-photo-file").click();
+    });
+  }
+  const savePostEditBtn = document.getElementById("save-post-edit-btn");
+  if(savePostEditBtn){
+    savePostEditBtn.addEventListener("click", async (e)=>{
+      const btn = e.currentTarget;
+      const caption = document.getElementById("edit-caption-input").value.trim();
+      btn.disabled = true; btn.textContent = "Enregistrement…";
+      const fields = { caption: caption || "…" };
+      if(editPostNewPhoto) fields.photo = editPostNewPhoto;
+      await editPost(activeModalPostId, fields);
+      await loadGroupPosts(group.id);
+      postEditMode = false; editPostNewPhoto = null;
+      renderOverlay(); bindPostDetailSheet();
+      renderGroupContentOnly();
+      showToast("Photo mise à jour ✅");
+    });
+  }
+  const deletePostBtn = document.getElementById("delete-post-btn");
+  if(deletePostBtn){
+    deletePostBtn.addEventListener("click", async ()=>{
+      if(!confirm("Supprimer définitivement cette photo, avec ses commentaires et réactions ?")) return;
+      await deletePost(activeModalPostId);
+      await loadGroupPosts(group.id);
+      closeOverlay();
+      renderGroupContentOnly();
+      showToast("Photo supprimée");
+    });
+  }
+
+  // Comment author can edit their own comment inline.
+  document.querySelectorAll(".edit-comment-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      editingCommentId = btn.dataset.comment;
+      renderOverlay(); bindPostDetailSheet();
+    });
+  });
+  document.querySelectorAll(".save-comment-edit-btn").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const row = btn.closest(".comment-edit-row");
+      const val = row.querySelector(".edit-comment-input").value.trim();
+      if(!val) return;
+      await editComment(btn.dataset.comment, val);
+      await loadGroupPosts(group.id);
+      editingCommentId = null;
+      renderOverlay(); bindPostDetailSheet();
+    });
+  });
+
   const sendBtn = document.getElementById("comment-send");
   const input = document.getElementById("comment-input");
   async function submitComment(){
+    if(commentSubmitting || sendBtn.disabled) return;
     const val = input.value.trim();
     if(!val) return;
+    commentSubmitting = true;
+    sendBtn.disabled = true;
+    input.disabled = true;
+    input.value = "";
     await insertComment(activeModalPostId, val);
     await loadGroupPosts(group.id);
-    input.value = "";
+    commentSubmitting = false;
     renderOverlay(); bindPostDetailSheet();
     renderGroupContentOnly();
   }
   sendBtn.addEventListener("click", submitComment);
-  input.addEventListener("keydown", (e)=>{ if(e.key === "Enter") submitComment(); });
+  input.addEventListener("keydown", (e)=>{ if(e.key === "Enter"){ e.preventDefault(); submitComment(); } });
 }
+document.getElementById("edit-photo-file").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  e.target.value = "";
+  if(!file || !pendingEditPostId) return;
+  editPostNewPhoto = await compressImage(file);
+  pendingEditPostId = null;
+  if(modalType === "postDetail"){ renderOverlay(); bindPostDetailSheet(); }
+  showToast("Nouvelle photo prête — clique \"Enregistrer\" pour valider");
+});
 document.getElementById("reply-file").addEventListener("change", async (e)=>{
   const file = e.target.files[0];
   if(!file || !pendingReplyPostId) return;

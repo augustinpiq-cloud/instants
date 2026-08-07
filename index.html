@@ -288,6 +288,13 @@
   .reply-add{ width:50px; height:50px; border-radius:8px; border:1.5px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:18px; cursor:pointer; background:transparent; }
   .modal-footer{ padding:10px 14px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; flex-shrink:0; }
   .modal-footer input[type=text]{ flex:1; border:1px solid var(--line); border-radius:20px; padding:9px 14px; font-size:13.5px; outline:none; }
+  .mention-suggestions{
+    position:absolute; bottom:100%; left:14px; right:14px; margin-bottom:6px;
+    background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 -4px 16px rgba(31,51,41,0.12);
+    max-height:180px; overflow-y:auto; z-index:5;
+  }
+  .mention-item{ display:flex; align-items:center; gap:8px; padding:9px 12px; font-size:13.5px; cursor:pointer; }
+  .mention-item:hover{ background:var(--paper-dim); }
   .send-btn{ all:unset; cursor:pointer; background:var(--pine); color:var(--paper); padding:9px 16px; border-radius:20px; font-size:13px; font-weight:500; }
 
   /* add post sheet */
@@ -299,6 +306,35 @@
   .upload-zone img{ width:100%; max-height:280px; object-fit:cover; display:block; }
   .form-block{ padding:0 18px 16px; }
   .checkbox-row{ display:flex; align-items:center; gap:9px; font-size:13.5px; padding:6px 0 16px; }
+
+  .photo-strip{ display:flex; gap:8px; padding:16px 18px 4px; overflow-x:auto; }
+  .photo-thumb{ position:relative; width:84px; height:84px; border-radius:10px; overflow:hidden; flex-shrink:0; }
+  .photo-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-thumb-remove{
+    all:unset; position:absolute; top:3px; right:3px; width:18px; height:18px; border-radius:50%;
+    background:rgba(24,39,32,0.75); color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .photo-thumb-add{
+    width:84px; height:84px; border-radius:10px; border:1.5px dashed var(--line); flex-shrink:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    color:var(--ink-soft); cursor:pointer; font-size:18px;
+  }
+
+  .tag-people-list{ display:flex; flex-direction:column; gap:2px; max-height:180px; overflow-y:auto; }
+  .tag-person-row{ display:flex; align-items:center; gap:10px; padding:8px 4px; font-size:13.5px; cursor:pointer; }
+  .tag-person-row input{ margin:0; }
+
+  .carousel{
+    position:relative; width:100%; aspect-ratio:4/3; overflow-x:auto; display:flex;
+    scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; background:var(--paper-dim);
+  }
+  .carousel::-webkit-scrollbar{ display:none; }
+  .carousel img{ flex:0 0 100%; width:100%; height:100%; object-fit:cover; scroll-snap-align:center; }
+  .carousel-dots{ position:absolute; bottom:8px; left:0; right:0; display:flex; justify-content:center; gap:5px; pointer-events:none; }
+  .carousel-dot{ width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.55); }
+  .carousel-dot.active{ background:#fff; }
+  .tagged-line{ font-size:12.5px; color:var(--ink-soft); padding:0 14px 8px; margin-top:-4px; }
+  .location-line{ font-size:12.5px; color:var(--ink-soft); display:flex; align-items:center; gap:4px; }
 
   /* invite sheet */
   .invite-code{
@@ -338,7 +374,7 @@
 <div class="app-shell" id="app-shell"></div>
 <div class="overlay" id="overlay"><div class="modal-sheet" id="modal-sheet"></div></div>
 <div class="toast" id="toast"></div>
-<input type="file" id="hidden-file" accept="image/*" style="display:none" />
+<input type="file" id="hidden-file" accept="image/*" multiple style="display:none" />
 <input type="file" id="reply-file" accept="image/*" style="display:none" />
 <input type="file" id="avatar-file" accept="image/*" style="display:none" />
 <input type="file" id="edit-photo-file" accept="image/*" style="display:none" />
@@ -383,6 +419,11 @@ let postEditMode = false;
 let editingCommentId = null;
 let editPostNewPhoto = null;
 let pendingEditPostId = null;
+let memberProfilesCache = {}; // groupId -> [{id, displayName, avatarColor, avatarPhoto}]
+let newPostTaggedIds = [];    // selected member ids to tag on a new post
+let newPostPhotos = [];       // multiple compressed photo dataURLs for a new post
+let newPostLocation = "";
+let mentionActiveIndex = -1;  // for @mention keyboard navigation (reserved)
 let pendingAvatarTarget = null; // "signup" | "editProfile"
 let newPostPhoto = null; // dataURL
 let newPostFavorite = false;
@@ -547,6 +588,23 @@ async function loadGroupsList(){
   }catch(e){ console.error("loadGroupsList error", e); groupsData = []; }
 }
 
+// Member profiles for a group (name/avatar), used by the "tag people" picker
+// and the @mention autocomplete. Cached per group since it rarely changes.
+async function loadGroupMemberProfiles(groupId){
+  const group = getGroup(groupId);
+  if(!group) return [];
+  try{
+    const { data, error } = await sb.from("profiles").select("*").in("id", group.memberUsernames);
+    if(error) throw error;
+    const list = (data || []).map(row => ({
+      id: row.id, displayName: row.display_name || "?",
+      avatarColor: row.avatar_color, avatarPhoto: row.avatar_photo
+    }));
+    memberProfilesCache[groupId] = list;
+    return list;
+  }catch(e){ console.error("loadGroupMemberProfiles error", e); return memberProfilesCache[groupId] || []; }
+}
+
 async function createGroupInDb(name, subtitle){
   const code = genCode();
   const groupId = crypto.randomUUID();
@@ -581,34 +639,61 @@ async function loadGroupPosts(groupId){
     if(error) throw error;
     const rows = postsRows || [];
     const postIds = rows.map(p => p.id);
-    let reactions = [], comments = [], replies = [];
+    let reactions = [], comments = [], replies = [], extraPhotos = [], tags = [];
     if(postIds.length){
-      const [r1, r2, r3] = await Promise.all([
+      const [r1, r2, r3, r4, r5] = await Promise.all([
         sb.from("reactions").select("*").in("post_id", postIds),
         sb.from("comments").select("*").in("post_id", postIds).order("created_at", { ascending:true }),
-        sb.from("replies").select("*").in("post_id", postIds).order("created_at", { ascending:true })
+        sb.from("replies").select("*").in("post_id", postIds).order("created_at", { ascending:true }),
+        sb.from("post_photos").select("*").in("post_id", postIds).order("position", { ascending:true }),
+        sb.from("post_tags").select("post_id, user_id").in("post_id", postIds)
       ]);
       reactions = r1.data || []; comments = r2.data || []; replies = r3.data || [];
+      extraPhotos = r4.data || []; tags = r5.data || [];
     }
-    postsCache[groupId] = rows.map(p => ({
-      id: p.id, date: p.post_date, createdAt: p.created_at,
-      authorUsername: p.author_id, authorName: p.author_name,
-      authorAvatarColor: p.author_avatar_color, authorAvatarPhoto: p.author_avatar_photo,
-      caption: p.caption, photo: p.photo, favorite: p.favorite,
-      reactionsByUser: Object.fromEntries(reactions.filter(r => r.post_id === p.id).map(r => [r.user_id, r.emoji])),
-      comments: comments.filter(c => c.post_id === p.id).map(c => ({ id: c.id, authorId: c.author_id, author: c.author_name, text: c.text })),
-      replies: replies.filter(r => r.post_id === p.id).map(r => ({ author: r.author_name, img: r.img }))
-    }));
+    const taggedIds = [...new Set(tags.map(t => t.user_id))];
+    let tagProfiles = {};
+    if(taggedIds.length){
+      const { data: profRows } = await sb.from("profiles").select("id, display_name").in("id", taggedIds);
+      (profRows || []).forEach(p => { tagProfiles[p.id] = p.display_name; });
+    }
+    postsCache[groupId] = rows.map(p => {
+      const ownPhotos = extraPhotos.filter(ph => ph.post_id === p.id).map(ph => ph.photo);
+      return {
+        id: p.id, date: p.post_date, createdAt: p.created_at,
+        authorUsername: p.author_id, authorName: p.author_name,
+        authorAvatarColor: p.author_avatar_color, authorAvatarPhoto: p.author_avatar_photo,
+        caption: p.caption, photo: p.photo, favorite: p.favorite, location: p.location || "",
+        photos: ownPhotos.length ? ownPhotos : [p.photo],
+        taggedUsers: tags.filter(t => t.post_id === p.id).map(t => ({ id: t.user_id, displayName: tagProfiles[t.user_id] || "?" })),
+        reactionsByUser: Object.fromEntries(reactions.filter(r => r.post_id === p.id).map(r => [r.user_id, r.emoji])),
+        comments: comments.filter(c => c.post_id === p.id).map(c => ({ id: c.id, authorId: c.author_id, author: c.author_name, text: c.text })),
+        replies: replies.filter(r => r.post_id === p.id).map(r => ({ author: r.author_name, img: r.img }))
+      };
+    });
   }catch(e){ console.error("loadGroupPosts error", e); postsCache[groupId] = []; }
 }
 
 async function insertPost(groupId, post){
+  const postId = crypto.randomUUID();
+  const photos = (post.photos && post.photos.length) ? post.photos : [post.photo];
   const { error } = await sb.from("posts").insert({
-    group_id: groupId, author_id: currentUser.id, author_name: currentUser.displayName,
+    id: postId, group_id: groupId, author_id: currentUser.id, author_name: currentUser.displayName,
     author_avatar_color: currentUser.avatarColor, author_avatar_photo: currentUser.avatarPhoto,
-    post_date: post.date, caption: post.caption, photo: post.photo, favorite: post.favorite
+    post_date: post.date, caption: post.caption, photo: photos[0], favorite: post.favorite,
+    location: post.location || null
   });
   if(error){ console.error("insertPost error", error); showToast("⚠️ Publication impossible pour l'instant."); return false; }
+  if(photos.length){
+    const rows = photos.map((photo, i) => ({ post_id: postId, photo, position: i }));
+    const { error: photosErr } = await sb.from("post_photos").insert(rows);
+    if(photosErr) console.error("insertPost photos error", photosErr);
+  }
+  if(post.taggedIds && post.taggedIds.length){
+    const rows = post.taggedIds.map(uid => ({ post_id: postId, user_id: uid }));
+    const { error: tagErr } = await sb.from("post_tags").insert(rows);
+    if(tagErr) console.error("insertPost tags error", tagErr);
+  }
   return true;
 }
 async function setPostFavorite(postId, value){
@@ -1432,9 +1517,11 @@ function renderFeed(group, posts){
               <span class="name">${escapeHtml(p.authorName)}</span>
               <span class="date">${formatDateShort(p.date)} · ${formatTime(p.createdAt)}</span>
             </div>
-            <img class="post-img" src="${p.photo}" alt="" loading="lazy"/>
+            ${renderCarousel(p.photos, "carousel-feed-" + p.id)}
             <div class="post-body">
               <p class="post-caption">${escapeHtml(p.caption)}</p>
+              ${p.location ? `<p class="location-line">📍 ${escapeHtml(p.location)}</p>` : ""}
+              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">🏷️ avec ${p.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
               <div class="post-foot">
                 ${Object.entries(reactionCounts(p)).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
                 <span>💬 ${p.comments.length}</span>
@@ -1453,6 +1540,33 @@ function avatarHtml(name, color, photo, sizeStyle){
     return `<span class="avatar-lg" style="${style}padding:0; overflow:hidden;"><img src="${photo}" alt="" style="width:100%;height:100%;object-fit:cover;"/></span>`;
   }
   return `<span class="avatar-lg" style="${style}background:${color || '#4C7A6C'}">${(name || "?")[0].toUpperCase()}</span>`;
+}
+// Renders a swipeable, native-scroll image carousel (CSS scroll-snap — no JS
+// touch handling needed) with dot indicators when a post has multiple photos.
+function renderCarousel(photos, carouselId){
+  if(!photos || photos.length <= 1){
+    return `<img class="post-img" src="${(photos && photos[0]) || ''}" alt="" loading="lazy"/>`;
+  }
+  return `
+    <div class="carousel" id="${carouselId}" data-count="${photos.length}">
+      ${photos.map(p => `<img src="${p}" alt="" loading="lazy"/>`).join("")}
+    </div>
+    <div class="carousel-dots" id="${carouselId}-dots">
+      ${photos.map((_, i) => `<span class="carousel-dot ${i===0?'active':''}"></span>`).join("")}
+    </div>
+  `;
+}
+function bindCarousels(root){
+  (root || document).querySelectorAll(".carousel").forEach(el=>{
+    if(el.dataset.bound) return;
+    el.dataset.bound = "1";
+    const dots = document.getElementById(el.id + "-dots");
+    if(!dots) return;
+    el.addEventListener("scroll", ()=>{
+      const idx = Math.round(el.scrollLeft / el.clientWidth);
+      dots.querySelectorAll(".carousel-dot").forEach((d,i)=> d.classList.toggle("active", i===idx));
+    });
+  });
 }
 function reactionCounts(post){
   const counts = {};
@@ -1533,9 +1647,13 @@ function bindGroupScreen(){
       renderGroupContentOnly();
     });
   });
-  document.getElementById("fab-add").addEventListener("click", ()=>{
-    newPostPhoto = null; newPostFavorite = false;
+  document.getElementById("fab-add").addEventListener("click", async ()=>{
+    newPostPhotos = []; newPostFavorite = false; newPostTaggedIds = []; newPostLocation = "";
     modalType = "addPost"; renderOverlay(); openOverlay();
+    if(!memberProfilesCache[activeGroupId]){
+      await loadGroupMemberProfiles(activeGroupId);
+      if(modalType === "addPost"){ renderOverlay(); bindAddPostSheet(); }
+    }
   });
   attachContentHandlers();
 }
@@ -1548,6 +1666,7 @@ function renderGroupContentOnly(){
   attachContentHandlers();
 }
 function attachContentHandlers(){
+  bindCarousels();
   const refreshBtn = document.getElementById("refresh-btn");
   if(refreshBtn){ refreshBtn.addEventListener("click", async ()=>{
     await loadGroupPosts(activeGroupId);
@@ -1726,7 +1845,10 @@ function renderPostDetailSheet(){
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
-      <div class="modal-img-wrap"><img src="${post.photo}" alt=""/></div>
+      ${postEditMode
+        ? `<div class="modal-img-wrap"><img src="${editPostNewPhoto || post.photo}" alt=""/></div>`
+        : `<div class="modal-img-wrap">${renderCarousel(post.photos, "carousel-detail-" + post.id)}</div>`
+      }
       ${postEditMode ? `
         <div class="form-block" style="padding-top:14px;">
           <div class="field">
@@ -1737,7 +1859,11 @@ function renderPostDetailSheet(){
           <button class="btn-primary" id="save-post-edit-btn" style="margin-bottom:10px;">Enregistrer</button>
           <button class="btn-text" id="delete-post-btn" style="color:var(--danger);">🗑️ Supprimer cette photo</button>
         </div>
-      ` : `<div class="modal-caption">${escapeHtml(post.caption)}</div>`}
+      ` : `
+        <div class="modal-caption">${escapeHtml(post.caption)}</div>
+        ${post.location ? `<p class="location-line" style="padding:0 18px 6px;">📍 ${escapeHtml(post.location)}</p>` : ""}
+        ${post.taggedUsers && post.taggedUsers.length ? `<p class="location-line" style="padding:0 18px 10px;">🏷️ avec ${post.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
+      `}
       <div class="modal-reactions">
         ${REACTION_SET.map(e => {
           const counts = reactionCounts(post);
@@ -1770,8 +1896,9 @@ function renderPostDetailSheet(){
         </div>
       </div>
     </div>
-    <div class="modal-footer">
-      <input type="text" id="comment-input" placeholder="Écrire un commentaire…" />
+    <div class="modal-footer" style="position:relative;">
+      <div class="mention-suggestions" id="mention-suggestions" style="display:none;"></div>
+      <input type="text" id="comment-input" placeholder="Écrire un commentaire… (@ pour mentionner)" />
       <button class="send-btn" id="comment-send">Envoyer</button>
     </div>
   `;
@@ -1780,6 +1907,7 @@ function bindPostDetailSheet(){
   const group = getGroup(activeGroupId);
   const posts = postsCache[group.id];
   const post = posts.find(p => p.id === activeModalPostId);
+  bindCarousels(document.getElementById("modal-sheet"));
   document.getElementById("close-sheet").addEventListener("click", closeOverlay);
   document.querySelectorAll(".react-btn[data-emoji]").forEach(btn=>{
     btn.addEventListener("click", async ()=>{
@@ -1866,10 +1994,46 @@ function bindPostDetailSheet(){
 
   const sendBtn = document.getElementById("comment-send");
   const input = document.getElementById("comment-input");
+  const mentionBox = document.getElementById("mention-suggestions");
+  if(!memberProfilesCache[group.id]){
+    loadGroupMemberProfiles(group.id); // fire-and-forget; ready by the next keystroke
+  }
+  function getMentionQuery(){
+    const pos = input.selectionStart;
+    const text = input.value.slice(0, pos);
+    const m = text.match(/(?:^|\s)@([a-zA-ZÀ-ÿ0-9_]*)$/);
+    return m ? m[1] : null;
+  }
+  input.addEventListener("input", ()=>{
+    const query = getMentionQuery();
+    if(query === null){ mentionBox.style.display = "none"; return; }
+    const members = (memberProfilesCache[group.id] || [])
+      .filter(m => m.id !== currentUser.id && m.displayName.toLowerCase().startsWith(query.toLowerCase()));
+    if(!members.length){ mentionBox.style.display = "none"; return; }
+    mentionBox.innerHTML = members.slice(0, 5).map(m => `
+      <div class="mention-item" data-name="${escapeHtml(m.displayName)}">
+        ${avatarHtml(m.displayName, m.avatarColor, m.avatarPhoto, "width:22px;height:22px;font-size:10px;")}
+        <span>${escapeHtml(m.displayName)}</span>
+      </div>
+    `).join("");
+    mentionBox.style.display = "block";
+    mentionBox.querySelectorAll(".mention-item").forEach(item=>{
+      item.addEventListener("click", ()=>{
+        const name = item.dataset.name;
+        const pos = input.selectionStart;
+        const before = input.value.slice(0, pos).replace(/(?:^|\s)@([a-zA-ZÀ-ÿ0-9_]*)$/, (m0)=> (m0[0]===" "?" ":"") + "@" + name + " ");
+        const after = input.value.slice(pos);
+        input.value = before + after;
+        mentionBox.style.display = "none";
+        input.focus();
+      });
+    });
+  });
   async function submitComment(){
     if(commentSubmitting || sendBtn.disabled) return;
     const val = input.value.trim();
     if(!val) return;
+    mentionBox.style.display = "none";
     commentSubmitting = true;
     sendBtn.disabled = true;
     input.disabled = true;
@@ -1881,7 +2045,7 @@ function bindPostDetailSheet(){
     renderGroupContentOnly();
   }
   sendBtn.addEventListener("click", submitComment);
-  input.addEventListener("keydown", (e)=>{ if(e.key === "Enter"){ e.preventDefault(); submitComment(); } });
+  input.addEventListener("keydown", (e)=>{ if(e.key === "Enter" && mentionBox.style.display==="none"){ e.preventDefault(); submitComment(); } });
 }
 document.getElementById("edit-photo-file").addEventListener("change", async (e)=>{
   const file = e.target.files[0];
@@ -1920,42 +2084,105 @@ document.getElementById("avatar-file").addEventListener("change", async (e)=>{
 });
 
 function renderAddPostSheet(){
+  const members = (memberProfilesCache[activeGroupId] || []).filter(m => m.id !== currentUser.id);
   return `
     <div class="sheet-head">
       <h4>Nouveau moment</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
-      <div class="upload-zone ${newPostPhoto ? 'has-img':''}" id="upload-zone">
-        ${newPostPhoto ? `<img src="${newPostPhoto}" alt=""/>` : `<span>📷</span><br/>Appuie pour prendre ou choisir une photo`}
+      <div class="photo-strip" id="photo-strip">
+        ${newPostPhotos.map((p, i) => `
+          <div class="photo-thumb">
+            <img src="${p}" alt=""/>
+            <button class="photo-thumb-remove" data-index="${i}">✕</button>
+          </div>
+        `).join("")}
+        <div class="photo-thumb-add" id="add-photo-zone">
+          <span>📷</span><span style="font-size:10.5px;">${newPostPhotos.length ? "Ajouter" : "Choisir"}</span>
+        </div>
       </div>
       <div class="form-block">
         <div class="field">
           <label>Légende</label>
           <input type="text" id="post-caption" placeholder="Raconte ce moment…" />
         </div>
+        <div class="field">
+          <label>Lieu (facultatif)</label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="post-location" placeholder="ex. Annecy, France" value="${escapeHtml(newPostLocation)}" style="flex:1;" />
+            <button class="icon-btn" style="background:var(--paper-dim); color:var(--pine); border-radius:10px; width:44px;" id="use-location-btn" title="Utiliser ma position">📍</button>
+          </div>
+        </div>
+        ${members.length ? `
+          <div class="field">
+            <label>Taguer des personnes (facultatif)</label>
+            <div class="tag-people-list">
+              ${members.map(m => `
+                <label class="tag-person-row">
+                  <input type="checkbox" class="tag-person-checkbox" value="${m.id}" ${newPostTaggedIds.includes(m.id) ? "checked":""}/>
+                  ${avatarHtml(m.displayName, m.avatarColor, m.avatarPhoto, "width:24px;height:24px;font-size:10px;")}
+                  <span>${escapeHtml(m.displayName)}</span>
+                </label>
+              `).join("")}
+            </div>
+          </div>
+        ` : ""}
         <label class="checkbox-row">
           <input type="checkbox" id="post-favorite" ${newPostFavorite?'checked':''}/> ⭐ Ajouter à la sélection du livre de l'année
         </label>
-        <button class="btn-primary" id="publish-post" ${newPostPhoto ? "" : "disabled"}>Publier</button>
+        <button class="btn-primary" id="publish-post" ${newPostPhotos.length ? "" : "disabled"}>Publier</button>
       </div>
     </div>
   `;
 }
 function bindAddPostSheet(){
   document.getElementById("close-sheet").addEventListener("click", closeOverlay);
-  document.getElementById("upload-zone").addEventListener("click", ()=> document.getElementById("hidden-file").click());
+  document.getElementById("add-photo-zone").addEventListener("click", ()=> document.getElementById("hidden-file").click());
+  document.querySelectorAll(".photo-thumb-remove").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      newPostPhotos.splice(Number(btn.dataset.index), 1);
+      renderOverlay(); bindAddPostSheet();
+    });
+  });
   const favCheck = document.getElementById("post-favorite");
   favCheck.addEventListener("change", ()=>{ newPostFavorite = favCheck.checked; });
+  const locationInput = document.getElementById("post-location");
+  locationInput.addEventListener("input", ()=>{ newPostLocation = locationInput.value; });
+  document.getElementById("use-location-btn").addEventListener("click", async (e)=>{
+    const btn = e.currentTarget;
+    if(!navigator.geolocation){ showToast("Localisation non disponible sur cet appareil."); return; }
+    btn.textContent = "…";
+    navigator.geolocation.getCurrentPosition(async (pos)=>{
+      try{
+        const { latitude, longitude } = pos.coords;
+        const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=fr`);
+        const data = await res.json();
+        const place = [data.city || data.locality, data.countryName].filter(Boolean).join(", ");
+        newPostLocation = place || `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+      }catch(e){ showToast("Impossible de récupérer le lieu."); }
+      btn.textContent = "📍";
+      renderOverlay(); bindAddPostSheet();
+    }, ()=>{ btn.textContent = "📍"; showToast("Localisation refusée ou indisponible."); }, { timeout: 8000 });
+  });
+  document.querySelectorAll(".tag-person-checkbox").forEach(cb=>{
+    cb.addEventListener("change", ()=>{
+      if(cb.checked){ if(!newPostTaggedIds.includes(cb.value)) newPostTaggedIds.push(cb.value); }
+      else { newPostTaggedIds = newPostTaggedIds.filter(id => id !== cb.value); }
+    });
+  });
   document.getElementById("publish-post").addEventListener("click", async (e)=>{
-    if(!newPostPhoto) return;
+    if(!newPostPhotos.length) return;
     const btn = e.currentTarget;
     if(btn.disabled) return; // guard against double-tap submitting twice
     btn.disabled = true;
     btn.textContent = "Publication…";
     const caption = document.getElementById("post-caption").value.trim();
     const group = getGroup(activeGroupId);
-    const post = { date: todayISO(), caption: caption || "…", photo: newPostPhoto, favorite: newPostFavorite };
+    const post = {
+      date: todayISO(), caption: caption || "…", photos: newPostPhotos, favorite: newPostFavorite,
+      location: newPostLocation.trim(), taggedIds: newPostTaggedIds
+    };
     await insertPost(group.id, post);
     await loadGroupPosts(group.id);
     closeOverlay();
@@ -1964,9 +2191,11 @@ function bindAddPostSheet(){
   });
 }
 document.getElementById("hidden-file").addEventListener("change", async (e)=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  newPostPhoto = await compressImage(file);
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+  for(const file of files){
+    newPostPhotos.push(await compressImage(file));
+  }
   e.target.value = "";
   if(modalType === "addPost"){ renderOverlay(); bindAddPostSheet(); }
 });

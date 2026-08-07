@@ -489,28 +489,22 @@ async function upsertProfile(userId, fields){
   }catch(e){ console.error("upsertProfile error", e); return false; }
 }
 
-// Builds the in-memory currentUser object for a logged-in auth user. If the
-// profiles row is missing — which can happen the very first time someone logs
-// in after confirming their email, since the profile couldn't be written at
-// signUp time while unauthenticated — it's recreated here from the signup
-// metadata that was safely stashed on the auth user itself, or from their
-// email as a last resort.
+// Builds the in-memory currentUser object for a logged-in auth user, and
+// repairs the profiles row on the spot if the display name is missing or
+// still equal to the email (which can happen if it couldn't be saved at
+// signup time while unauthenticated, pending email confirmation).
 async function buildCurrentUser(authUser){
-  let profile = await fetchProfile(authUser.id);
-  if(!profile){
-    const meta = authUser.user_metadata || {};
-    const displayName = meta.display_name || authUser.email.split("@")[0];
-    const avatarColor = meta.avatar_color || PALETTE[0];
-    const avatarPhoto = meta.avatar_photo || null;
+  const profile = await fetchProfile(authUser.id);
+  const meta = authUser.user_metadata || {};
+  let displayName = (profile && profile.displayName) || meta.display_name;
+  let avatarColor = (profile && profile.avatarColor) || meta.avatar_color || PALETTE[0];
+  let avatarPhoto = (profile && profile.avatarPhoto) || meta.avatar_photo || null;
+  const brokenName = !displayName || displayName === authUser.email;
+  if(brokenName){ displayName = authUser.email.split("@")[0]; }
+  if(!profile || brokenName){
     await upsertProfile(authUser.id, { displayName, avatarColor, avatarPhoto });
-    profile = { displayName, avatarColor, avatarPhoto };
   }
-  return {
-    id: authUser.id, email: authUser.email,
-    displayName: profile.displayName || authUser.email,
-    avatarColor: profile.avatarColor || PALETTE[0],
-    avatarPhoto: profile.avatarPhoto || null
-  };
+  return { id: authUser.id, email: authUser.email, displayName, avatarColor, avatarPhoto };
 }
 
 // Groups the current user belongs to — the database itself only returns rows

@@ -935,7 +935,8 @@ function bindAuth(){
       const { data, error } = await supabase.auth.signUp({ email, password });
       if(error){
         btn.disabled = false; btn.textContent = "Créer mon compte";
-        setError(error.message.includes("registered") ? "Cet email est déjà utilisé." : "Impossible de créer le compte pour l'instant.");
+        console.error("signUp error", error.status, error.message);
+        setError("Erreur : " + error.message + (error.status ? " (code " + error.status + ")" : ""));
         return;
       }
       const userId = data.user && data.user.id;

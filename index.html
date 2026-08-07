@@ -989,7 +989,7 @@ function renderHomeScreen(){
               <div class="group-card" data-group="${g.id}">
                 ${last ? `<img class="group-thumb" src="${last.photo}" alt=""/>` : `<div class="group-thumb placeholder">📷</div>`}
                 <div class="info">
-                  <p class="gname">${g.name}</p>
+                  <p class="gname">${escapeHtml(g.name)}</p>
                   <p class="gmeta">${g.memberUsernames.length} membre${g.memberUsernames.length>1?"s":""} · ${posts.length} moment${posts.length>1?"s":""}</p>
                   ${unseen > 0 ? `<p class="new-moments"><span class="dot-badge"></span>${unseen} nouveau${unseen>1?"x":""} moment${unseen>1?"s":""}</p>` : ""}
                 </div>
@@ -1076,7 +1076,7 @@ function renderMyPhotosSection(){
           <div class="my-photo-cell" data-group="${groupId}" data-post="${post.id}">
             <img src="${post.photo}" alt=""/>
             <div class="mp-overlay">
-              <span>${groupName}</span>
+              <span>${escapeHtml(groupName)}</span>
               ${totalReactions > 0 ? `<span>${totalReactions} réaction${totalReactions>1?"s":""}</span>` : `<span>Aucune réaction</span>`}
             </div>
           </div>
@@ -1108,12 +1108,12 @@ function renderProfileScreen(){
       <div class="profile-content">
         <div class="profile-head">
           <div class="avatar-lg" style="${currentUser.avatarPhoto ? 'padding:0;overflow:hidden;' : 'background:'+currentUser.avatarColor}">${currentUser.avatarPhoto ? `<img src="${currentUser.avatarPhoto}" alt="" style="width:100%;height:100%;object-fit:cover;"/>` : currentUser.displayName[0].toUpperCase()}</div>
-          <h3>${currentUser.displayName}</h3>
+          <h3>${escapeHtml(currentUser.displayName)}</h3>
           <span class="uname">${currentUser.email}</span>
         </div>
         <p class="section-label">${groups.length} groupe${groups.length>1?"s":""}</p>
         <div class="profile-list">
-          ${groups.map(g => `<div class="list-row" data-group="${g.id}"><span>📔</span> ${g.name}</div>`).join("")}
+          ${groups.map(g => `<div class="list-row" data-group="${g.id}"><span>📔</span> ${escapeHtml(g.name)}</div>`).join("")}
           <div class="list-row" id="edit-profile-btn" style="margin-top:14px;"><span>✏️</span> Modifier mon profil</div>
           <div class="list-row" id="install-help-btn"><span>📲</span> Comment installer l'appli ?</div>
           <div class="list-row" id="logout-btn"><span>🚪</span> <span class="danger" style="color:var(--danger)">Se déconnecter</span></div>
@@ -1263,7 +1263,7 @@ function renderGroupScreen(){
   return `
     <div class="app-header">
       <button class="icon-btn" id="back-btn">←</button>
-      <h2>${group.name}</h2>
+      <h2>${escapeHtml(group.name)}</h2>
       <button class="icon-btn" id="invite-btn" title="Inviter">🔑</button>
       <button class="icon-btn" id="book-btn" title="Livre de l'année">📖</button>
     </div>
@@ -1299,7 +1299,7 @@ function renderFeed(group, posts){
           <article class="post-card" data-post="${p.id}">
             <div class="post-head">
               ${avatarHtml(p.authorName, p.authorAvatarColor, p.authorAvatarPhoto, "width:28px;height:28px;font-size:12px;")}
-              <span class="name">${p.authorName}</span>
+              <span class="name">${escapeHtml(p.authorName)}</span>
               <span class="date">${formatDateShort(p.date)}</span>
             </div>
             <img class="post-img" src="${p.photo}" alt="" loading="lazy"/>
@@ -1373,7 +1373,7 @@ function renderBook(group, posts){
   const favorites = posts.filter(p => p.favorite);
   return `
     <div class="book-intro">
-      <h3 style="font-family:'Fraunces',serif; font-size:19px; margin:0 0 8px;">Le livre de ${group.name}</h3>
+      <h3 style="font-family:'Fraunces',serif; font-size:19px; margin:0 0 8px;">Le livre de ${escapeHtml(group.name)}</h3>
       <p>Marquez vos photos préférées avec ⭐ tout au long de l'année : elles atterrissent ici, prêtes pour le livre imprimé envoyé à chaque membre en fin d'année.</p>
     </div>
     ${favorites.length === 0 ? `
@@ -1381,7 +1381,7 @@ function renderBook(group, posts){
     ` : `
       <div class="book-spread">
         <div class="book-grid">
-          ${favorites.map(p => `<div class="book-photo"><img src="${p.photo}" alt=""/><div class="cap">${formatDateShort(p.date)} · ${p.authorName}</div></div>`).join("")}
+          ${favorites.map(p => `<div class="book-photo"><img src="${p.photo}" alt=""/><div class="cap">${formatDateShort(p.date)} · ${escapeHtml(p.authorName)}</div></div>`).join("")}
         </div>
         <div class="book-actions">
           <button class="btn-primary" id="order-book">Commander le livre</button>
@@ -1587,7 +1587,7 @@ function renderPostDetailSheet(){
   return `
     <div class="sheet-head">
       ${avatarHtml(post.authorName, post.authorAvatarColor, post.authorAvatarPhoto, "width:30px;height:30px;font-size:12px;")}
-      <h4>${post.authorName} · ${formatDateShort(post.date)}</h4>
+      <h4>${escapeHtml(post.authorName)} · ${formatDateShort(post.date)}</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
@@ -1602,9 +1602,9 @@ function renderPostDetailSheet(){
         <button class="react-btn" id="fav-toggle">${post.favorite ? "⭐ Dans le livre" : "☆ Ajouter au livre"}</button>
       </div>
       <div class="modal-comments" id="modal-comments">
-        ${post.comments.map(c => `<div class="comment"><span class="cname">${c.author}</span>${escapeHtml(c.text)}</div>`).join("") || `<div class="comment" style="color:var(--ink-soft)">Aucun commentaire pour l'instant.</div>`}
+        ${post.comments.map(c => `<div class="comment"><span class="cname">${escapeHtml(c.author)}</span>${escapeHtml(c.text)}</div>`).join("") || `<div class="comment" style="color:var(--ink-soft)">Aucun commentaire pour l'instant.</div>`}
         <div class="replies-row">
-          ${post.replies.map(r => `<img class="reply-thumb" src="${r.img}" title="${r.author}"/>`).join("")}
+          ${post.replies.map(r => `<img class="reply-thumb" src="${r.img}" title="${escapeHtml(r.author)}"/>`).join("")}
           <button class="reply-add" id="reply-add-btn">+</button>
         </div>
       </div>
@@ -1764,7 +1764,7 @@ function renderInviteSheet(){
   const group = getGroup(activeGroupId);
   return `
     <div class="sheet-head">
-      <h4>Inviter dans ${group.name}</h4>
+      <h4>Inviter dans ${escapeHtml(group.name)}</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">

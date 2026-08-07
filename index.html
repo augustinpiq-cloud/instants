@@ -1229,6 +1229,7 @@ function renderProfileScreen(){
         <div class="profile-list">
           ${groups.map(g => `<div class="list-row" data-group="${g.id}"><span>📔</span> ${escapeHtml(g.name)}</div>`).join("")}
           <div class="list-row" id="edit-profile-btn" style="margin-top:14px;"><span>✏️</span> Modifier mon profil</div>
+          <div class="list-row" id="fix-old-posts-btn"><span>🔧</span> Corriger mes anciennes publications</div>
           <div class="list-row" id="install-help-btn"><span>📲</span> Comment installer l'appli ?</div>
           <div class="list-row" id="logout-btn"><span>🚪</span> <span class="danger" style="color:var(--danger)">Se déconnecter</span></div>
         </div>
@@ -1254,6 +1255,15 @@ function bindProfile(){
   document.getElementById("edit-profile-btn").addEventListener("click", ()=>{
     editProfilePhoto = undefined;
     modalType = "editProfile"; renderOverlay(); openOverlay();
+  });
+  document.getElementById("fix-old-posts-btn").addEventListener("click", async (e)=>{
+    const btn = e.currentTarget;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<span>⏳</span> Correction en cours…`;
+    await syncAuthorInfoEverywhere(currentUser.id, currentUser.displayName, currentUser.avatarColor, currentUser.avatarPhoto);
+    postsCache = {};
+    btn.innerHTML = originalHtml;
+    showToast("Anciennes publications corrigées ✅");
   });
   document.getElementById("install-help-btn").addEventListener("click", ()=>{
     modalType = "installHelp"; renderOverlay(); openOverlay();

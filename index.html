@@ -338,28 +338,10 @@
 /* ===================== Supabase setup =====================
    1. Go to https://supabase.com, sign up free (no card required).
    2. Create a new project (pick any name/region, set a database password — you won't need it again).
-   3. Once the project is ready, open the "SQL Editor" tab and run this once:
-
-        create table instants (
-          key text primary key,
-          value text,
-          updated_at timestamptz default now()
-        );
-        alter table instants enable row level security;
-        create policy "public access" on instants for all using (true) with check (true);
-
-        create table profiles (
-          id uuid references auth.users on delete cascade primary key,
-          display_name text,
-          avatar_color text,
-          avatar_photo text,
-          created_at timestamptz default now()
-        );
-        alter table profiles enable row level security;
-        create policy "profiles are viewable by everyone" on profiles for select using (true);
-        create policy "users can insert their own profile" on profiles for insert with check (auth.uid() = id);
-        create policy "users can update their own profile" on profiles for update using (auth.uid() = id);
-
+   3. Once the project is ready, open the "SQL Editor" tab, paste the full contents of
+      SCHEMA-SECURISE.sql (provided alongside this file), and click "Run". It creates
+      groups, posts, reactions, comments, replies, profiles and seen_status — each with
+      real per-group access rules enforced by the database, not just by this app's code.
    4. Go to "Project Settings" > "API". Copy the "Project URL" and the "anon public" key.
    5. Paste them below, replacing the two placeholders.
    6. Go to "Authentication" > "URL Configuration". Set "Site URL" to your GitHub Pages link
@@ -372,30 +354,6 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // The UMD script above exposes a global `supabase` namespace object with .createClient().
 // We name OUR client instance "sb" (not "supabase") to avoid shadowing that global.
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-/* ===================== Storage helpers ===================== */
-async function storGet(key, shared){
-  try{
-    const { data, error } = await sb.from("instants").select("value").eq("key", key).maybeSingle();
-    if(error) throw error;
-    return data && data.value ? JSON.parse(data.value) : null;
-  }catch(e){ console.error("storGet error", e); return null; }
-}
-async function storSet(key, value, shared, retries){
-  if(retries === undefined) retries = 2;
-  const payload = JSON.stringify(value);
-  for(let attempt = 0; attempt <= retries; attempt++){
-    try{
-      const { error } = await sb.from("instants").upsert({ key, value: payload, updated_at: new Date().toISOString() });
-      if(!error) return true;
-      console.error("storage error", error);
-    }catch(e){
-      console.error("storage error (attempt "+(attempt+1)+"/"+(retries+1)+")", e);
-    }
-    if(attempt < retries){ await new Promise(res => setTimeout(res, 600*(attempt+1))); }
-  }
-  return false;
-}
 
 
 /* ===================== App state ===================== */
@@ -511,28 +469,120 @@ async function upsertProfile(userId, fields){
     return true;
   }catch(e){ console.error("upsertProfile error", e); return false; }
 }
-async function loadGroupsList(){ groupsData = (await storGet("groups-list", true)) || []; }
-async function saveGroupsList(){
-  const ok = await storSet("groups-list", groupsData, true);
-  if(!ok) showToast("⚠️ Sauvegarde du groupe impossible pour l'instant — réessaie dans un instant.");
-  return ok;
+
+// Groups the current user belongs to — the database itself only returns rows
+// this person is a real member of (enforced by Row Level Security), not the app.
+async function loadGroupsList(){
+  try{
+    const { data: memberships, error } = await sb
+      .from("group_members")
+      .select("group_id, groups(id, name, subtitle, join_code, created_by)")
+      .eq("user_id", currentUser.id);
+    if(error) throw error;
+    const groups = (memberships || []).map(m => m.groups).filter(Boolean);
+    const groupIds = groups.map(g => g.id);
+    let allMembers = [];
+    if(groupIds.length){
+      const { data: mdata } = await sb.from("group_members").select("group_id, user_id").in("group_id", groupIds);
+      allMembers = mdata || [];
+    }
+    groupsData = groups.map(g => ({
+      id: g.id, name: g.name, subtitle: g.subtitle || "",
+      joinCode: g.join_code, createdBy: g.created_by,
+      memberUsernames: allMembers.filter(m => m.group_id === g.id).map(m => m.user_id)
+    }));
+  }catch(e){ console.error("loadGroupsList error", e); groupsData = []; }
 }
-async function loadGroupPosts(groupId){ postsCache[groupId] = (await storGet("posts:"+groupId, true)) || []; }
-async function saveGroupPosts(groupId){
-  const ok = await storSet("posts:"+groupId, postsCache[groupId], true);
-  if(!ok) showToast("⚠️ Sauvegarde impossible pour l'instant — réessaie dans un instant.");
-  return ok;
+
+async function createGroupInDb(name, subtitle){
+  const code = genCode();
+  const { data, error } = await sb.from("groups")
+    .insert({ name, subtitle: subtitle || null, join_code: code, created_by: currentUser.id })
+    .select().single();
+  if(error){ console.error("createGroup error", error); return null; }
+  const { error: memberErr } = await sb.from("group_members").insert({ group_id: data.id, user_id: currentUser.id });
+  if(memberErr){ console.error("createGroup member error", memberErr); return null; }
+  const group = {
+    id: data.id, name: data.name, subtitle: data.subtitle || "",
+    joinCode: data.join_code, createdBy: data.created_by, memberUsernames: [currentUser.id]
+  };
+  groupsData.push(group);
+  return group;
 }
-// Always re-fetches the latest saved posts before applying a change and saving.
-// Without this, two people posting/reacting around the same time could overwrite
-// each other's changes (whoever saved last would silently erase the other's post).
-async function mutatePosts(groupId, mutatorFn){
-  const latest = (await storGet("posts:"+groupId, true)) || [];
-  const updated = mutatorFn(latest) || latest;
-  postsCache[groupId] = updated;
-  const ok = await storSet("posts:"+groupId, updated, true);
-  if(!ok) showToast("⚠️ Sauvegarde impossible pour l'instant — réessaie dans un instant.");
-  return ok;
+
+// Looks up and joins a group by its invite code via a secure database function —
+// this never requires (or grants) broad read access to the groups table.
+async function joinGroupByCodeInDb(code){
+  try{
+    const { data, error } = await sb.rpc("join_group_by_code", { code });
+    if(error) throw error;
+    return data; // the joined group's id
+  }catch(e){ console.error("joinGroupByCode error", e); return null; }
+}
+
+// Fetches a group's photos plus their reactions/comments/replies, and assembles
+// them into the same in-memory shape the rest of the app already expects.
+async function loadGroupPosts(groupId){
+  try{
+    const { data: postsRows, error } = await sb.from("posts").select("*").eq("group_id", groupId).order("post_date", { ascending:false });
+    if(error) throw error;
+    const rows = postsRows || [];
+    const postIds = rows.map(p => p.id);
+    let reactions = [], comments = [], replies = [];
+    if(postIds.length){
+      const [r1, r2, r3] = await Promise.all([
+        sb.from("reactions").select("*").in("post_id", postIds),
+        sb.from("comments").select("*").in("post_id", postIds).order("created_at", { ascending:true }),
+        sb.from("replies").select("*").in("post_id", postIds).order("created_at", { ascending:true })
+      ]);
+      reactions = r1.data || []; comments = r2.data || []; replies = r3.data || [];
+    }
+    postsCache[groupId] = rows.map(p => ({
+      id: p.id, date: p.post_date,
+      authorUsername: p.author_id, authorName: p.author_name,
+      authorAvatarColor: p.author_avatar_color, authorAvatarPhoto: p.author_avatar_photo,
+      caption: p.caption, photo: p.photo, favorite: p.favorite,
+      reactionsByUser: Object.fromEntries(reactions.filter(r => r.post_id === p.id).map(r => [r.user_id, r.emoji])),
+      comments: comments.filter(c => c.post_id === p.id).map(c => ({ author: c.author_name, text: c.text })),
+      replies: replies.filter(r => r.post_id === p.id).map(r => ({ author: r.author_name, img: r.img }))
+    }));
+  }catch(e){ console.error("loadGroupPosts error", e); postsCache[groupId] = []; }
+}
+
+async function insertPost(groupId, post){
+  const { error } = await sb.from("posts").insert({
+    group_id: groupId, author_id: currentUser.id, author_name: currentUser.displayName,
+    author_avatar_color: currentUser.avatarColor, author_avatar_photo: currentUser.avatarPhoto,
+    post_date: post.date, caption: post.caption, photo: post.photo, favorite: post.favorite
+  });
+  if(error){ console.error("insertPost error", error); showToast("⚠️ Publication impossible pour l'instant."); return false; }
+  return true;
+}
+async function setPostFavorite(postId, value){
+  const { error } = await sb.from("posts").update({ favorite: value }).eq("id", postId);
+  if(error){ console.error("setPostFavorite error", error); showToast("⚠️ Action impossible pour l'instant."); return false; }
+  return true;
+}
+async function setReaction(postId, emoji){
+  try{
+    const { data: existing } = await sb.from("reactions").select("emoji").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
+    if(existing && existing.emoji === emoji){
+      await sb.from("reactions").delete().eq("post_id", postId).eq("user_id", currentUser.id);
+    } else {
+      await sb.from("reactions").upsert({ post_id: postId, user_id: currentUser.id, emoji });
+    }
+    return true;
+  }catch(e){ console.error("setReaction error", e); showToast("⚠️ Action impossible pour l'instant."); return false; }
+}
+async function insertComment(postId, text){
+  const { error } = await sb.from("comments").insert({ post_id: postId, author_id: currentUser.id, author_name: currentUser.displayName, text });
+  if(error){ console.error("insertComment error", error); showToast("⚠️ Commentaire impossible pour l'instant."); return false; }
+  return true;
+}
+async function insertReply(postId, img){
+  const { error } = await sb.from("replies").insert({ post_id: postId, author_id: currentUser.id, author_name: currentUser.displayName, img });
+  if(error){ console.error("insertReply error", error); showToast("⚠️ Réponse impossible pour l'instant."); return false; }
+  return true;
 }
 
 function myGroups(){
@@ -543,13 +593,19 @@ function getGroup(id){ return groupsData.find(g => g.id === id); }
 
 /* ===================== Unseen moments + app badge ===================== */
 async function loadSeenMap(){
-  seenMap = (await storGet("seen:" + currentUser.id, false)) || {};
+  try{
+    const { data, error } = await sb.from("seen_status").select("group_id, seen_count").eq("user_id", currentUser.id);
+    if(error) throw error;
+    seenMap = {};
+    (data || []).forEach(row => { seenMap[row.group_id] = row.seen_count; });
+  }catch(e){ console.error("loadSeenMap error", e); seenMap = {}; }
 }
 async function markGroupSeen(groupId){
   const count = (postsCache[groupId] || []).length;
   if(seenMap[groupId] !== count){
     seenMap[groupId] = count;
-    await storSet("seen:" + currentUser.id, seenMap, false);
+    try{ await sb.from("seen_status").upsert({ user_id: currentUser.id, group_id: groupId, seen_count: count }); }
+    catch(e){ console.error("markGroupSeen error", e); }
   }
 }
 function unseenCountFor(groupId){
@@ -651,7 +707,6 @@ async function init(){
   if(codeParam){ pendingJoinCode = codeParam.trim().toUpperCase(); }
   screen = "loading";
   render();
-  await loadGroupsList();
 
   // Give the recovery-link listener a brief moment to fire before deciding the screen.
   await new Promise(res => setTimeout(res, 300));
@@ -674,17 +729,15 @@ async function init(){
 }
 
 async function tryPendingJoin(){
+  await loadGroupsList();
   await loadSeenMap();
   if(!pendingJoinCode){ screen = "home"; render(); ensureAllMyPostsLoaded().then(()=>{ updateAppBadge(); if(screen==="home"){ render(); } }); return; }
   const code = pendingJoinCode;
   pendingJoinCode = null;
-  const g = groupsData.find(gr => gr.joinCode === code);
-  if(!g){ showToast("Le lien d'invitation n'est plus valide."); screen = "home"; render(); return; }
-  if(!g.memberUsernames.includes(currentUser.id)){
-    g.memberUsernames.push(currentUser.id);
-    await saveGroupsList();
-  }
-  activeGroupId = g.id;
+  const groupId = await joinGroupByCodeInDb(code);
+  if(!groupId){ showToast("Le lien d'invitation n'est plus valide."); screen = "home"; render(); return; }
+  await loadGroupsList();
+  activeGroupId = groupId;
   activeView = "fil";
   screen = "group";
   render();
@@ -1193,16 +1246,17 @@ function renderCreateGroupScreen(){
 }
 function bindCreateGroup(){
   document.getElementById("back-btn").addEventListener("click", ()=>{ screen="home"; render(); });
-  document.getElementById("create-submit").addEventListener("click", async ()=>{
+  document.getElementById("create-submit").addEventListener("click", async (e)=>{
+    const btn = e.currentTarget;
     const errBox = document.getElementById("create-error");
     const name = document.getElementById("group-name").value.trim();
     const subtitle = document.getElementById("group-subtitle").value.trim();
     if(!name){ errBox.innerHTML = `<p class="form-error">Donne un nom à ton groupe.</p>`; return; }
-    const g = { id: uid("g"), name, subtitle: subtitle || "", memberUsernames:[currentUser.id], joinCode: genCode(), createdBy: currentUser.id };
-    groupsData.push(g);
-    await saveGroupsList();
+    btn.disabled = true; btn.textContent = "Création…";
+    const g = await createGroupInDb(name, subtitle);
+    btn.disabled = false; btn.textContent = "Créer le groupe";
+    if(!g){ errBox.innerHTML = `<p class="form-error">Impossible de créer le groupe pour l'instant.</p>`; return; }
     postsCache[g.id] = [];
-    await saveGroupPosts(g.id);
     activeGroupId = g.id;
     activeView = "fil";
     screen = "group";
@@ -1237,21 +1291,23 @@ function renderJoinGroupScreen(){
 }
 function bindJoinGroup(){
   document.getElementById("back-btn").addEventListener("click", ()=>{ screen="home"; render(); });
-  document.getElementById("join-submit").addEventListener("click", async ()=>{
+  document.getElementById("join-submit").addEventListener("click", async (e)=>{
+    const btn = e.currentTarget;
     const errBox = document.getElementById("join-error");
     const code = document.getElementById("join-code").value.trim().toUpperCase();
-    const g = groupsData.find(gr => gr.joinCode === code);
-    if(!g){ errBox.innerHTML = `<p class="form-error">Ce code ne correspond à aucun groupe.</p>`; return; }
-    if(!g.memberUsernames.includes(currentUser.id)){
-      g.memberUsernames.push(currentUser.id);
-      await saveGroupsList();
-    }
-    activeGroupId = g.id;
+    if(!code){ errBox.innerHTML = `<p class="form-error">Entre un code.</p>`; return; }
+    btn.disabled = true; btn.textContent = "Connexion…";
+    const groupId = await joinGroupByCodeInDb(code);
+    btn.disabled = false; btn.textContent = "Rejoindre";
+    if(!groupId){ errBox.innerHTML = `<p class="form-error">Ce code ne correspond à aucun groupe.</p>`; return; }
+    await loadGroupsList();
+    const g = getGroup(groupId);
+    activeGroupId = groupId;
     activeView = "fil";
     screen = "group";
     render();
     if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
-    showToast(`Bienvenue dans ${g.name} 🎉`);
+    showToast(`Bienvenue dans ${g ? g.name : "le groupe"} 🎉`);
   });
 }
 
@@ -1623,29 +1679,15 @@ function bindPostDetailSheet(){
   document.querySelectorAll(".react-btn[data-emoji]").forEach(btn=>{
     btn.addEventListener("click", async ()=>{
       const emoji = btn.dataset.emoji;
-      await mutatePosts(group.id, posts => {
-        const p = posts.find(x => x.id === activeModalPostId);
-        if(!p) return posts;
-        if(!p.reactionsByUser) p.reactionsByUser = {};
-        // One reaction per person: clicking the same emoji again removes it,
-        // clicking a different emoji replaces the previous choice.
-        if(p.reactionsByUser[currentUser.id] === emoji){
-          delete p.reactionsByUser[currentUser.id];
-        } else {
-          p.reactionsByUser[currentUser.id] = emoji;
-        }
-        return posts;
-      });
+      await setReaction(activeModalPostId, emoji);
+      await loadGroupPosts(group.id);
       renderOverlay(); bindPostDetailSheet();
       renderGroupContentOnly();
     });
   });
   document.getElementById("fav-toggle").addEventListener("click", async ()=>{
-    await mutatePosts(group.id, posts => {
-      const p = posts.find(x => x.id === activeModalPostId);
-      if(p) p.favorite = !p.favorite;
-      return posts;
-    });
+    await setPostFavorite(activeModalPostId, !post.favorite);
+    await loadGroupPosts(group.id);
     renderOverlay(); bindPostDetailSheet();
     renderGroupContentOnly();
   });
@@ -1658,11 +1700,8 @@ function bindPostDetailSheet(){
   async function submitComment(){
     const val = input.value.trim();
     if(!val) return;
-    await mutatePosts(group.id, posts => {
-      const p = posts.find(x => x.id === activeModalPostId);
-      if(p) p.comments.push({ author: currentUser.displayName, text: val });
-      return posts;
-    });
+    await insertComment(activeModalPostId, val);
+    await loadGroupPosts(group.id);
     input.value = "";
     renderOverlay(); bindPostDetailSheet();
     renderGroupContentOnly();
@@ -1676,11 +1715,8 @@ document.getElementById("reply-file").addEventListener("change", async (e)=>{
   const dataUrl = await compressImage(file);
   const group = getGroup(activeGroupId);
   const replyToId = pendingReplyPostId;
-  await mutatePosts(group.id, posts => {
-    const p = posts.find(x => x.id === replyToId);
-    if(p) p.replies.push({ author: currentUser.displayName, img: dataUrl });
-    return posts;
-  });
+  await insertReply(replyToId, dataUrl);
+  await loadGroupPosts(group.id);
   e.target.value = "";
   renderOverlay(); bindPostDetailSheet();
   showToast("Photo ajoutée en réponse 📸");
@@ -1736,14 +1772,9 @@ function bindAddPostSheet(){
     btn.textContent = "Publication…";
     const caption = document.getElementById("post-caption").value.trim();
     const group = getGroup(activeGroupId);
-    const post = {
-      id: uid("p"), date: todayISO(),
-      authorUsername: currentUser.id, authorName: currentUser.displayName,
-      authorAvatarColor: currentUser.avatarColor, authorAvatarPhoto: currentUser.avatarPhoto,
-      caption: caption || "…", photo: newPostPhoto, favorite: newPostFavorite,
-      reactionsByUser:{}, comments:[], replies:[]
-    };
-    await mutatePosts(group.id, posts => { posts.push(post); return posts; });
+    const post = { date: todayISO(), caption: caption || "…", photo: newPostPhoto, favorite: newPostFavorite };
+    await insertPost(group.id, post);
+    await loadGroupPosts(group.id);
     closeOverlay();
     renderGroupContentOnly();
     showToast("Photo publiée 🎉");

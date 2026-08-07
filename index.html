@@ -488,6 +488,19 @@ async function upsertProfile(userId, fields){
     return true;
   }catch(e){ console.error("upsertProfile error", e); return false; }
 }
+// Posts, comments and replies each store a snapshot of the author's name/avatar
+// at the time they were published (so the feed doesn't need a live join for
+// every render). When someone edits their profile, this pushes that update
+// onto everything they've already published, so old content catches up too.
+async function syncAuthorInfoEverywhere(userId, displayName, avatarColor, avatarPhoto){
+  try{
+    await Promise.all([
+      sb.from("posts").update({ author_name: displayName, author_avatar_color: avatarColor, author_avatar_photo: avatarPhoto }).eq("author_id", userId),
+      sb.from("comments").update({ author_name: displayName }).eq("author_id", userId),
+      sb.from("replies").update({ author_name: displayName }).eq("author_id", userId)
+    ]);
+  }catch(e){ console.error("syncAuthorInfoEverywhere error", e); }
+}
 
 // Builds the in-memory currentUser object for a logged-in auth user, and
 // repairs the profiles row on the spot if the display name is missing or
@@ -503,6 +516,9 @@ async function buildCurrentUser(authUser){
   if(brokenName){ displayName = authUser.email.split("@")[0]; }
   if(!profile || brokenName){
     await upsertProfile(authUser.id, { displayName, avatarColor, avatarPhoto });
+  }
+  if(brokenName){
+    await syncAuthorInfoEverywhere(authUser.id, displayName, avatarColor, avatarPhoto);
   }
   return { id: authUser.id, email: authUser.email, displayName, avatarColor, avatarPhoto };
 }
@@ -1641,11 +1657,13 @@ function bindEditProfileSheet(){
     }
     const finalPhoto = editProfilePhoto !== undefined ? editProfilePhoto : currentUser.avatarPhoto;
     await upsertProfile(currentUser.id, { displayName: name, avatarColor: selectedColor, avatarPhoto: finalPhoto });
+    await syncAuthorInfoEverywhere(currentUser.id, name, selectedColor, finalPhoto);
+    postsCache = {}; // stale author snapshots may be cached locally — force a fresh reload on next visit
     currentUser.displayName = name;
     currentUser.avatarColor = selectedColor;
     currentUser.avatarPhoto = finalPhoto;
     if(authUpdates.email) showToast("Vérifie ta nouvelle boîte mail pour confirmer le changement d'adresse 📬");
-    else showToast("Profil mis à jour ✅");
+    else showToast("Profil mis à jour partout ✅");
     editProfilePhoto = undefined;
     btn.disabled = false; btn.textContent = "Enregistrer";
     closeOverlay();

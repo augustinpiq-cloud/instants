@@ -499,15 +499,15 @@ async function createGroupInDb(name, subtitle){
   const groupId = crypto.randomUUID();
   const { error } = await sb.from("groups")
     .insert({ id: groupId, name, subtitle: subtitle || null, join_code: code, created_by: currentUser.id });
-  if(error){ console.error("createGroup error", error); return null; }
+  if(error){ console.error("createGroup error", error); return { group: null, error }; }
   const { error: memberErr } = await sb.from("group_members").insert({ group_id: groupId, user_id: currentUser.id });
-  if(memberErr){ console.error("createGroup member error", memberErr); return null; }
+  if(memberErr){ console.error("createGroup member error", memberErr); return { group: null, error: memberErr }; }
   const group = {
     id: groupId, name, subtitle: subtitle || "",
     joinCode: code, createdBy: currentUser.id, memberUsernames: [currentUser.id]
   };
   groupsData.push(group);
-  return group;
+  return { group, error: null };
 }
 
 // Looks up and joins a group by its invite code via a secure database function —
@@ -1253,9 +1253,12 @@ function bindCreateGroup(){
     const subtitle = document.getElementById("group-subtitle").value.trim();
     if(!name){ errBox.innerHTML = `<p class="form-error">Donne un nom à ton groupe.</p>`; return; }
     btn.disabled = true; btn.textContent = "Création…";
-    const g = await createGroupInDb(name, subtitle);
+    const { group: g, error } = await createGroupInDb(name, subtitle);
     btn.disabled = false; btn.textContent = "Créer le groupe";
-    if(!g){ errBox.innerHTML = `<p class="form-error">Impossible de créer le groupe pour l'instant.</p>`; return; }
+    if(!g){
+      errBox.innerHTML = `<p class="form-error">Erreur : ${error ? error.message : "inconnue"}${error && error.code ? " (code " + error.code + ")" : ""}</p>`;
+      return;
+    }
     postsCache[g.id] = [];
     activeGroupId = g.id;
     activeView = "fil";

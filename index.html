@@ -496,15 +496,15 @@ async function loadGroupsList(){
 
 async function createGroupInDb(name, subtitle){
   const code = genCode();
-  const { data, error } = await sb.from("groups")
-    .insert({ name, subtitle: subtitle || null, join_code: code, created_by: currentUser.id })
-    .select().single();
+  const groupId = crypto.randomUUID();
+  const { error } = await sb.from("groups")
+    .insert({ id: groupId, name, subtitle: subtitle || null, join_code: code, created_by: currentUser.id });
   if(error){ console.error("createGroup error", error); return null; }
-  const { error: memberErr } = await sb.from("group_members").insert({ group_id: data.id, user_id: currentUser.id });
+  const { error: memberErr } = await sb.from("group_members").insert({ group_id: groupId, user_id: currentUser.id });
   if(memberErr){ console.error("createGroup member error", memberErr); return null; }
   const group = {
-    id: data.id, name: data.name, subtitle: data.subtitle || "",
-    joinCode: data.join_code, createdBy: data.created_by, memberUsernames: [currentUser.id]
+    id: groupId, name, subtitle: subtitle || "",
+    joinCode: code, createdBy: currentUser.id, memberUsernames: [currentUser.id]
   };
   groupsData.push(group);
   return group;

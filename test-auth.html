@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Test connexion Supabase</title>
+<style>
+  body{ font-family: -apple-system, sans-serif; padding: 20px; background:#182720; color:#F6F1E4; }
+  button{ display:block; width:100%; padding:16px; margin:10px 0; font-size:16px; border-radius:10px; border:none; background:#C9A24C; color:#182720; font-weight:600; }
+  pre{ background:#0f1a14; padding:14px; border-radius:10px; white-space:pre-wrap; word-break:break-word; font-size:13px; border:1px solid #2A4438; }
+  h2{ font-size:15px; margin-top:24px; color:#E4CE93; }
+  .ok{ color:#7A9E6E; }
+  .fail{ color:#e08585; }
+</style>
+</head>
+<body>
+<h1 style="font-size:20px;">Test de connexion Supabase</h1>
+<p>Cette page teste directement, étape par étape, si ton téléphone arrive à parler à Supabase — sans passer par le reste de l'appli.</p>
+
+<button id="btn-rest">1. Tester la base de données (REST)</button>
+<button id="btn-auth-settings">2. Tester le service Auth (settings)</button>
+<button id="btn-signup">3. Tester une vraie inscription</button>
+
+<h2>Résultat</h2>
+<pre id="output">En attente…</pre>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL = "https://gfomqbtsubtijanujun.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmb21xYnRzdWJ0aWphbnVianVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDg3NTksImV4cCI6MjEwMTYyNDc1OX0.Ognsd4cL-m2_zsY1WPw3Tpg0BrTJb9NCJ32xQqm3t00";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const out = document.getElementById("output");
+function log(label, ok, detail){
+  out.innerHTML = `<span class="${ok ? 'ok' : 'fail'}">${ok ? '✅' : '❌'} ${label}</span>\n\n${detail}`;
+}
+
+document.getElementById("btn-rest").addEventListener("click", async ()=>{
+  out.textContent = "Test en cours…";
+  try{
+    const { data, error } = await sb.from("instants").select("key").limit(1);
+    if(error) throw error;
+    log("Base de données (REST) OK", true, "La base de données répond normalement.\n\n" + JSON.stringify(data));
+  }catch(e){
+    log("Base de données (REST) — ÉCHEC", false, "name: " + e.name + "\nmessage: " + e.message + "\nstatus: " + (e.status || "n/a"));
+  }
+});
+
+document.getElementById("btn-auth-settings").addEventListener("click", async ()=>{
+  out.textContent = "Test en cours…";
+  try{
+    const res = await fetch(SUPABASE_URL + "/auth/v1/settings", {
+      headers: { apikey: SUPABASE_ANON_KEY }
+    });
+    const body = await res.text();
+    log("Auth settings — réponse reçue (statut " + res.status + ")", res.ok, body.slice(0, 500));
+  }catch(e){
+    log("Auth settings — ÉCHEC (la requête n'a même pas abouti)", false, "name: " + e.name + "\nmessage: " + e.message);
+  }
+});
+
+document.getElementById("btn-signup").addEventListener("click", async ()=>{
+  out.textContent = "Test en cours…";
+  const testEmail = "test" + Date.now() + "@example.com";
+  try{
+    const { data, error } = await sb.auth.signUp({ email: testEmail, password: "TestPassword1!" });
+    if(error) throw error;
+    log("Inscription test OK", true, "Compte de test créé avec succès : " + testEmail);
+  }catch(e){
+    log("Inscription test — ÉCHEC", false, "name: " + e.name + "\nmessage: " + e.message + "\nstatus: " + (e.status || "n/a"));
+  }
+});
+</script>
+</body>
+</html>

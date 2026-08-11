@@ -335,6 +335,18 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
     color:var(--ink-soft); cursor:pointer; font-size:18px;
   }
+  .crop-thumb-active{ box-shadow:0 0 0 2px var(--gold); }
+
+  .crop-preview{ margin:8px 18px 0; aspect-ratio:4/3; border-radius:12px; overflow:hidden; background:var(--paper-dim); }
+  .crop-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .crop-full-wrap{
+    position:relative; margin:10px 18px 0; border-radius:12px; overflow:hidden; background:#000; cursor:crosshair;
+  }
+  .crop-full-wrap img{ width:100%; height:auto; display:block; margin:0 auto; }
+  .crop-full-marker{
+    position:absolute; width:26px; height:26px; margin-left:-13px; margin-top:-13px;
+    border-radius:50%; border:2.5px solid var(--gold); box-shadow:0 0 0 2px rgba(0,0,0,0.5); pointer-events:none;
+  }
 
   .tag-people-list{ display:flex; flex-direction:column; gap:2px; max-height:180px; overflow-y:auto; }
   .tag-person-row{ display:flex; align-items:center; gap:10px; padding:8px 4px; font-size:13.5px; cursor:pointer; }
@@ -477,6 +489,10 @@ let postEditMode = false;
 let editingCommentId = null;
 let editPostNewPhoto = null;
 let pendingEditPostId = null;
+let adjustCropPostId = null;
+let adjustCropPhotoIndex = 0;
+let adjustFocusX = 50;
+let adjustFocusY = 50;
 let memberProfilesCache = {}; // groupId -> [{id, displayName, avatarColor, avatarPhoto}]
 let newPostTaggedIds = [];    // selected member ids to tag on a new post
 let newPostPhotos = [];       // multiple compressed photo dataURLs for a new post
@@ -718,13 +734,16 @@ async function loadGroupPosts(groupId){
       (profRows || []).forEach(p => { tagProfiles[p.id] = p.display_name; });
     }
     postsCache[groupId] = rows.map(p => {
-      const ownPhotos = extraPhotos.filter(ph => ph.post_id === p.id).map(ph => ph.photo);
+      const ownPhotos = extraPhotos.filter(ph => ph.post_id === p.id)
+        .map(ph => ({ id: ph.id, url: ph.photo, focusX: ph.focus_x ?? 50, focusY: ph.focus_y ?? 50 }));
+      const photos = ownPhotos.length ? ownPhotos : [{ id: null, url: p.photo, focusX: 50, focusY: 50 }];
       return {
         id: p.id, date: p.post_date, createdAt: p.created_at,
         authorUsername: p.author_id, authorName: p.author_name,
         authorAvatarColor: p.author_avatar_color, authorAvatarPhoto: p.author_avatar_photo,
-        caption: p.caption, photo: p.photo, favorite: p.favorite, location: p.location || "",
-        photos: ownPhotos.length ? ownPhotos : [p.photo],
+        caption: p.caption, photo: photos[0].url, favorite: p.favorite, location: p.location || "",
+        photoStyle: `object-position:${photos[0].focusX}% ${photos[0].focusY}%`,
+        photos: photos,
         taggedUsers: tags.filter(t => t.post_id === p.id).map(t => ({ id: t.user_id, displayName: tagProfiles[t.user_id] || "?" })),
         reactionsByUser: Object.fromEntries(reactions.filter(r => r.post_id === p.id).map(r => [r.user_id, r.emoji])),
         comments: comments.filter(c => c.post_id === p.id).map(c => ({ id: c.id, authorId: c.author_id, author: c.author_name, text: c.text })),
@@ -772,6 +791,12 @@ async function editPost(postId, fields){
 async function deletePost(postId){
   const { error } = await sb.from("posts").delete().eq("id", postId);
   if(error){ console.error("deletePost error", error); showToast("⚠️ Suppression impossible pour l'instant."); return false; }
+  return true;
+}
+async function setPhotoFocus(photoId, focusX, focusY){
+  if(!photoId){ showToast("⚠️ Cette photo ne peut pas encore être recadrée — republie-la pour activer le cadrage."); return false; }
+  const { error } = await sb.from("post_photos").update({ focus_x: focusX, focus_y: focusY }).eq("id", photoId);
+  if(error){ console.error("setPhotoFocus error", error); showToast("⚠️ Cadrage impossible pour l'instant."); return false; }
   return true;
 }
 async function setReaction(postId, emoji){
@@ -1248,7 +1273,7 @@ function renderHomeScreen(){
             const unseen = unseenCountFor(g.id);
             return `
               <div class="group-card" data-group="${g.id}">
-                ${last ? `<img class="group-thumb" src="${last.photo}" alt=""/>` : `<div class="group-thumb placeholder">📷</div>`}
+                ${last ? `<img class="group-thumb" src="${last.photo}" style="object-position:${last.photoStyle ? last.photoStyle.replace('object-position:','') : '50% 50%'}" alt=""/>` : `<div class="group-thumb placeholder">📷</div>`}
                 <div class="info">
                   <p class="gname">${escapeHtml(g.name)}</p>
                   <p class="gmeta">${g.memberUsernames.length} membre${g.memberUsernames.length>1?"s":""} · ${posts.length} moment${posts.length>1?"s":""}</p>
@@ -1335,7 +1360,7 @@ function renderMyPhotosSection(){
         const totalReactions = Object.keys(post.reactionsByUser || {}).length;
         return `
           <div class="my-photo-cell" data-group="${groupId}" data-post="${post.id}">
-            <img src="${post.photo}" alt=""/>
+            <img src="${post.photo}" style="${post.photoStyle||''}" alt=""/>
             <div class="mp-overlay">
               <span>${escapeHtml(groupName)}</span>
               ${totalReactions > 0 ? `<span>${totalReactions} réaction${totalReactions>1?"s":""}</span>` : `<span>Aucune réaction</span>`}
@@ -1608,12 +1633,13 @@ function avatarHtml(name, color, photo, sizeStyle){
 // touch handling needed) with dot indicators when a post has multiple photos.
 function renderCarousel(photos, carouselId){
   if(!photos || photos.length <= 1){
-    return `<img class="post-img" src="${(photos && photos[0]) || ''}" alt="" loading="lazy"/>`;
+    const p = photos && photos[0];
+    return `<img class="post-img" src="${p ? p.url : ''}" style="object-position:${p ? p.focusX : 50}% ${p ? p.focusY : 50}%" alt="" loading="lazy"/>`;
   }
   return `
     <div class="carousel-wrap">
       <div class="carousel" id="${carouselId}" data-count="${photos.length}">
-        ${photos.map(p => `<img src="${p}" alt="" loading="lazy"/>`).join("")}
+        ${photos.map(p => `<img src="${p.url}" style="object-position:${p.focusX}% ${p.focusY}%" alt="" loading="lazy"/>`).join("")}
       </div>
       <div class="carousel-dots" id="${carouselId}-dots">
         ${photos.map((_, i) => `<span class="carousel-dot ${i===0?'active':''}"></span>`).join("")}
@@ -1674,9 +1700,11 @@ function renderMonthView(group, posts){
     const dayPosts = byDate[dateStr];
     const isToday = isCurrentMonth && d === today.getDate();
     if(dayPosts && dayPosts.length){
-      const cover = dayPosts[dayPosts.length-1].photo;
+      const coverPost = dayPosts[dayPosts.length-1];
+      const cover = coverPost.photo;
+      const coverStyle = coverPost.photoStyle || "";
       cells += `
-        <div class="day-cell-lg has-photo ${isToday?'is-today':''}" data-daydate="${dateStr}" style="background-image:url('${cover}')">
+        <div class="day-cell-lg has-photo ${isToday?'is-today':''}" data-daydate="${dateStr}" style="background-image:url('${cover}'); background-position:${coverStyle.replace('object-position:','') || '50% 50%'}">
           <span class="day-num">${d}</span>
           ${dayPosts.length > 1 ? `<span class="day-count">${dayPosts.length}</span>` : ""}
         </div>`;
@@ -1758,7 +1786,7 @@ function renderBook(group, posts){
     ` : `
       <div class="book-spread">
         <div class="book-grid">
-          ${favorites.map(p => `<div class="book-photo"><img src="${p.photo}" alt=""/><div class="cap">${formatDateShort(p.date)} · ${escapeHtml(p.authorName)}</div></div>`).join("")}
+          ${favorites.map(p => `<div class="book-photo"><img src="${p.photo}" style="${p.photoStyle||''}" alt=""/><div class="cap">${formatDateShort(p.date)} · ${escapeHtml(p.authorName)}</div></div>`).join("")}
         </div>
         <div class="book-actions">
           <button class="btn-primary" id="order-book">Commander le livre</button>
@@ -1981,6 +2009,82 @@ function renderOverlay(){
   else if(modalType === "invite") { sheet.innerHTML = renderInviteSheet(); bindInviteSheet(); }
   else if(modalType === "installHelp") { sheet.innerHTML = renderInstallHelpSheet(); bindInstallHelpSheet(); }
   else if(modalType === "editProfile") { sheet.innerHTML = renderEditProfileSheet(); bindEditProfileSheet(); }
+  else if(modalType === "adjustCrop") { sheet.innerHTML = renderAdjustCropSheet(); bindAdjustCropSheet(); }
+}
+
+function renderAdjustCropSheet(){
+  const group = getGroup(activeGroupId);
+  const post = postsCache[group.id].find(p => p.id === adjustCropPostId);
+  const photo = post.photos[adjustCropPhotoIndex];
+  return `
+    <div class="sheet-head">
+      <h4>Ajuster le cadrage</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      ${post.photos.length > 1 ? `
+        <div class="photo-strip" style="padding-top:14px;">
+          ${post.photos.map((p, i) => `
+            <div class="photo-thumb ${i===adjustCropPhotoIndex ? 'crop-thumb-active':''}" data-photo-index="${i}" style="cursor:pointer;">
+              <img src="${p.url}" alt=""/>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+      <p class="section-label" style="padding:14px 18px 0;">Aperçu dans le fil</p>
+      <div class="crop-preview">
+        <img src="${photo.url}" id="crop-preview-img" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
+      </div>
+      <p class="section-label" style="padding:16px 18px 0;">Appuie sur la photo pour choisir ce qui doit rester visible</p>
+      <div class="crop-full-wrap" id="crop-full-wrap">
+        <img src="${photo.url}" id="crop-full-img" alt=""/>
+        <div class="crop-full-marker" id="crop-full-marker" style="left:${adjustFocusX}%; top:${adjustFocusY}%;"></div>
+      </div>
+      <div class="form-block" style="padding-top:16px;">
+        <button class="btn-primary" id="save-crop-btn">Enregistrer ce cadrage</button>
+      </div>
+    </div>
+  `;
+}
+function bindAdjustCropSheet(){
+  const group = getGroup(activeGroupId);
+  const post = postsCache[group.id].find(p => p.id === adjustCropPostId);
+  document.getElementById("close-sheet").addEventListener("click", ()=>{
+    modalType = "postDetail"; renderOverlay(); bindPostDetailSheet();
+  });
+  document.querySelectorAll("[data-photo-index]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      adjustCropPhotoIndex = Number(el.dataset.photoIndex);
+      const p = post.photos[adjustCropPhotoIndex];
+      adjustFocusX = p.focusX; adjustFocusY = p.focusY;
+      renderOverlay(); bindAdjustCropSheet();
+    });
+  });
+  const fullWrap = document.getElementById("crop-full-wrap");
+  const fullImg = document.getElementById("crop-full-img");
+  const marker = document.getElementById("crop-full-marker");
+  const previewImg = document.getElementById("crop-preview-img");
+  function setFocusFromEvent(clientX, clientY){
+    const rect = fullImg.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100));
+    adjustFocusX = Math.round(x); adjustFocusY = Math.round(y);
+    marker.style.left = adjustFocusX + "%"; marker.style.top = adjustFocusY + "%";
+    previewImg.style.objectPosition = `${adjustFocusX}% ${adjustFocusY}%`;
+  }
+  fullWrap.addEventListener("click", (e)=> setFocusFromEvent(e.clientX, e.clientY));
+  document.getElementById("save-crop-btn").addEventListener("click", async (e)=>{
+    const btn = e.currentTarget;
+    btn.disabled = true; btn.textContent = "Enregistrement…";
+    const photo = post.photos[adjustCropPhotoIndex];
+    await setPhotoFocus(photo.id, adjustFocusX, adjustFocusY);
+    await loadGroupPosts(group.id);
+    btn.disabled = false; btn.textContent = "Enregistrer ce cadrage";
+    modalType = "postDetail";
+    renderOverlay(); bindPostDetailSheet();
+    renderGroupContentOnly();
+    showToast("Cadrage mis à jour ✅");
+  });
 }
 
 function renderEditProfileSheet(){
@@ -2137,6 +2241,7 @@ function renderPostDetailSheet(){
             <input type="text" id="edit-caption-input" value="${escapeHtml(post.caption)}" />
           </div>
           <button class="btn-secondary" id="change-photo-btn" style="margin-bottom:10px;">📷 Changer la photo</button>
+          <button class="btn-secondary" id="adjust-crop-btn" style="margin-bottom:10px;">🖼️ Ajuster le cadrage</button>
           <button class="btn-primary" id="save-post-edit-btn" style="margin-bottom:10px;">Enregistrer</button>
           <button class="btn-text" id="delete-post-btn" style="color:var(--danger);">🗑️ Supprimer cette photo</button>
         </div>
@@ -2192,7 +2297,7 @@ function bindPostDetailSheet(){
   if(!postEditMode){
     document.querySelectorAll("#modal-sheet .modal-img-wrap img").forEach((img, i)=>{
       img.style.cursor = "zoom-in";
-      img.addEventListener("click", ()=> openLightbox(post.photos, i));
+      img.addEventListener("click", ()=> openLightbox(post.photos.map(ph => ph.url), i));
     });
   }
   document.getElementById("close-sheet").addEventListener("click", closeOverlay);
@@ -2230,6 +2335,17 @@ function bindPostDetailSheet(){
     changePhotoBtn.addEventListener("click", ()=>{
       pendingEditPostId = post.id;
       document.getElementById("edit-photo-file").click();
+    });
+  }
+  const adjustCropBtn = document.getElementById("adjust-crop-btn");
+  if(adjustCropBtn){
+    adjustCropBtn.addEventListener("click", ()=>{
+      adjustCropPostId = post.id;
+      adjustCropPhotoIndex = 0;
+      adjustFocusX = post.photos[0].focusX;
+      adjustFocusY = post.photos[0].focusY;
+      modalType = "adjustCrop";
+      renderOverlay();
     });
   }
   const savePostEditBtn = document.getElementById("save-post-edit-btn");

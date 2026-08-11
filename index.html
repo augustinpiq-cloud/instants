@@ -330,6 +330,10 @@
     all:unset; position:absolute; top:3px; right:3px; width:18px; height:18px; border-radius:50%;
     background:rgba(24,39,32,0.75); color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;
   }
+  .photo-thumb-crop-hint{
+    position:absolute; bottom:3px; left:3px; width:20px; height:20px; border-radius:6px;
+    background:rgba(24,39,32,0.6); display:flex; align-items:center; justify-content:center; font-size:11px;
+  }
   .photo-thumb-add{
     width:84px; height:84px; border-radius:10px; border:1.5px dashed var(--line); flex-shrink:0;
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
@@ -491,6 +495,7 @@ let editPostNewPhoto = null;
 let pendingEditPostId = null;
 let adjustCropPostId = null;
 let adjustCropPhotoIndex = 0;
+let adjustNewPhotoIndex = 0;
 let adjustFocusX = 50;
 let adjustFocusY = 50;
 let memberProfilesCache = {}; // groupId -> [{id, displayName, avatarColor, avatarPhoto}]
@@ -755,16 +760,16 @@ async function loadGroupPosts(groupId){
 
 async function insertPost(groupId, post){
   const postId = crypto.randomUUID();
-  const photos = (post.photos && post.photos.length) ? post.photos : [post.photo];
+  const photos = (post.photos && post.photos.length) ? post.photos : [{ url: post.photo, focusX: 50, focusY: 50 }];
   const { error } = await sb.from("posts").insert({
     id: postId, group_id: groupId, author_id: currentUser.id, author_name: currentUser.displayName,
     author_avatar_color: currentUser.avatarColor, author_avatar_photo: currentUser.avatarPhoto,
-    post_date: post.date, caption: post.caption, photo: photos[0], favorite: post.favorite,
+    post_date: post.date, caption: post.caption, photo: photos[0].url, favorite: post.favorite,
     location: post.location || null
   });
   if(error){ console.error("insertPost error", error); showToast("⚠️ Publication impossible pour l'instant."); return false; }
   if(photos.length){
-    const rows = photos.map((photo, i) => ({ post_id: postId, photo, position: i }));
+    const rows = photos.map((p, i) => ({ post_id: postId, photo: p.url, position: i, focus_x: p.focusX, focus_y: p.focusY }));
     const { error: photosErr } = await sb.from("post_photos").insert(rows);
     if(photosErr) console.error("insertPost photos error", photosErr);
   }
@@ -2010,6 +2015,72 @@ function renderOverlay(){
   else if(modalType === "installHelp") { sheet.innerHTML = renderInstallHelpSheet(); bindInstallHelpSheet(); }
   else if(modalType === "editProfile") { sheet.innerHTML = renderEditProfileSheet(); bindEditProfileSheet(); }
   else if(modalType === "adjustCrop") { sheet.innerHTML = renderAdjustCropSheet(); bindAdjustCropSheet(); }
+  else if(modalType === "adjustNewPhotoCrop") { sheet.innerHTML = renderAdjustNewPhotoCropSheet(); bindAdjustNewPhotoCropSheet(); }
+}
+
+function renderAdjustNewPhotoCropSheet(){
+  const photo = newPostPhotos[adjustNewPhotoIndex];
+  return `
+    <div class="sheet-head">
+      <h4>Ajuster le cadrage</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      ${newPostPhotos.length > 1 ? `
+        <div class="photo-strip" style="padding-top:14px;">
+          ${newPostPhotos.map((p, i) => `
+            <div class="photo-thumb ${i===adjustNewPhotoIndex ? 'crop-thumb-active':''}" data-newphoto-index="${i}" style="cursor:pointer;">
+              <img src="${p.url}" style="object-position:${p.focusX}% ${p.focusY}%" alt=""/>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+      <p class="section-label" style="padding:14px 18px 0;">Aperçu dans le fil</p>
+      <div class="crop-preview">
+        <img src="${photo.url}" id="crop-preview-img" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
+      </div>
+      <p class="section-label" style="padding:16px 18px 0;">Appuie sur la photo pour choisir ce qui doit rester visible</p>
+      <div class="crop-full-wrap" id="crop-full-wrap">
+        <img src="${photo.url}" id="crop-full-img" alt=""/>
+        <div class="crop-full-marker" id="crop-full-marker" style="left:${adjustFocusX}%; top:${adjustFocusY}%;"></div>
+      </div>
+      <div class="form-block" style="padding-top:16px;">
+        <button class="btn-primary" id="save-crop-btn">Valider ce cadrage</button>
+      </div>
+    </div>
+  `;
+}
+function bindAdjustNewPhotoCropSheet(){
+  document.getElementById("close-sheet").addEventListener("click", ()=>{
+    modalType = "addPost"; renderOverlay(); bindAddPostSheet();
+  });
+  document.querySelectorAll("[data-newphoto-index]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      adjustNewPhotoIndex = Number(el.dataset.newphotoIndex);
+      const p = newPostPhotos[adjustNewPhotoIndex];
+      adjustFocusX = p.focusX; adjustFocusY = p.focusY;
+      renderOverlay(); bindAdjustNewPhotoCropSheet();
+    });
+  });
+  const fullWrap = document.getElementById("crop-full-wrap");
+  const fullImg = document.getElementById("crop-full-img");
+  const marker = document.getElementById("crop-full-marker");
+  const previewImg = document.getElementById("crop-preview-img");
+  function setFocusFromEvent(clientX, clientY){
+    const rect = fullImg.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100));
+    adjustFocusX = Math.round(x); adjustFocusY = Math.round(y);
+    marker.style.left = adjustFocusX + "%"; marker.style.top = adjustFocusY + "%";
+    previewImg.style.objectPosition = `${adjustFocusX}% ${adjustFocusY}%`;
+  }
+  fullWrap.addEventListener("click", (e)=> setFocusFromEvent(e.clientX, e.clientY));
+  document.getElementById("save-crop-btn").addEventListener("click", ()=>{
+    newPostPhotos[adjustNewPhotoIndex].focusX = adjustFocusX;
+    newPostPhotos[adjustNewPhotoIndex].focusY = adjustFocusY;
+    modalType = "addPost";
+    renderOverlay(); bindAddPostSheet();
+  });
 }
 
 function renderAdjustCropSheet(){
@@ -2496,8 +2567,9 @@ function renderAddPostSheet(){
     <div class="sheet-body">
       <div class="photo-strip" id="photo-strip">
         ${newPostPhotos.map((p, i) => `
-          <div class="photo-thumb">
-            <img src="${p}" alt=""/>
+          <div class="photo-thumb" data-adjust-index="${i}" style="cursor:pointer;">
+            <img src="${p.url}" style="object-position:${p.focusX}% ${p.focusY}%" alt=""/>
+            <span class="photo-thumb-crop-hint">🖼️</span>
             <button class="photo-thumb-remove" data-index="${i}">✕</button>
           </div>
         `).join("")}
@@ -2505,6 +2577,7 @@ function renderAddPostSheet(){
           <span>📷</span><span style="font-size:10.5px;">${newPostPhotos.length ? "Ajouter" : "Choisir"}</span>
         </div>
       </div>
+      ${newPostPhotos.length ? `<p class="helper-text" style="margin:0 18px 6px;">Appuie sur une photo pour ajuster son cadrage.</p>` : ""}
       <div class="form-block">
         <div class="field">
           <label>Légende</label>
@@ -2543,9 +2616,19 @@ function bindAddPostSheet(){
   document.getElementById("close-sheet").addEventListener("click", closeOverlay);
   document.getElementById("add-photo-zone").addEventListener("click", ()=> document.getElementById("hidden-file").click());
   document.querySelectorAll(".photo-thumb-remove").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
       newPostPhotos.splice(Number(btn.dataset.index), 1);
       renderOverlay(); bindAddPostSheet();
+    });
+  });
+  document.querySelectorAll("[data-adjust-index]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      adjustNewPhotoIndex = Number(el.dataset.adjustIndex);
+      const p = newPostPhotos[adjustNewPhotoIndex];
+      adjustFocusX = p.focusX; adjustFocusY = p.focusY;
+      modalType = "adjustNewPhotoCrop";
+      renderOverlay();
     });
   });
   const favCheck = document.getElementById("post-favorite");
@@ -2599,7 +2682,7 @@ document.getElementById("hidden-file").addEventListener("change", async (e)=>{
   const files = Array.from(e.target.files || []);
   if(!files.length) return;
   for(const file of files){
-    newPostPhotos.push(await compressImage(file));
+    newPostPhotos.push({ url: await compressImage(file), focusX: 50, focusY: 50 });
   }
   e.target.value = "";
   if(modalType === "addPost"){ renderOverlay(); bindAddPostSheet(); }

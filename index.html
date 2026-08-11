@@ -774,8 +774,11 @@ async function loadSeenMap(){
     (data || []).forEach(row => { seenMap[row.group_id] = row.seen_count; });
   }catch(e){ console.error("loadSeenMap error", e); seenMap = {}; }
 }
+function othersPostsCount(groupId){
+  return (postsCache[groupId] || []).filter(p => p.authorUsername !== currentUser.id).length;
+}
 async function markGroupSeen(groupId){
-  const count = (postsCache[groupId] || []).length;
+  const count = othersPostsCount(groupId);
   if(seenMap[groupId] !== count){
     seenMap[groupId] = count;
     try{ await sb.from("seen_status").upsert({ user_id: currentUser.id, group_id: groupId, seen_count: count }); }
@@ -783,7 +786,7 @@ async function markGroupSeen(groupId){
   }
 }
 function unseenCountFor(groupId){
-  const total = (postsCache[groupId] || []).length;
+  const total = othersPostsCount(groupId);
   const seen = seenMap[groupId] || 0;
   return Math.max(0, total - seen);
 }
@@ -2310,6 +2313,8 @@ function bindAddPostSheet(){
     };
     await insertPost(group.id, post);
     await loadGroupPosts(group.id);
+    await markGroupSeen(group.id);
+    updateAppBadge();
     closeOverlay();
     renderGroupContentOnly();
     showToast("Photo publiée 🎉");

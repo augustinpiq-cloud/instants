@@ -192,18 +192,34 @@
   .reaction-chip{ display:inline-flex; align-items:center; gap:4px; background:var(--paper-dim); border-radius:20px; padding:3px 9px; font-size:12px; }
 
   /* ---------- Calendar ---------- */
-  .year-header{ margin-bottom:14px; }
-  .year-header h3{ font-family:'Fraunces', serif; font-size:18px; margin:0 0 2px; font-weight:600; }
-  .year-header span{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); }
-  .months-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  .month-block{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; }
-  .month-title{ font-family:'IBM Plex Mono', monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.7px; color:var(--ink-soft); margin-bottom:7px; }
-  .day-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:2.5px; }
-  .day-cell{ aspect-ratio:1/1; border-radius:3px; background:var(--paper-dim); background-size:cover; background-position:center; }
-  .day-cell.empty{ background:transparent; }
-  .day-cell.has-photo{ cursor:pointer; box-shadow:inset 0 0 0 1px #fff; }
+  .month-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .month-nav-title{ text-align:center; }
+  .month-nav-title h3{ font-family:'Fraunces', serif; font-size:20px; margin:0; font-weight:600; text-transform:capitalize; }
+  .month-nav-title span{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); }
+  .month-nav .icon-btn{ font-size:22px; width:38px; height:38px; }
+  .month-nav .icon-btn:disabled{ opacity:0.25; }
+  .dow-row{ display:grid; grid-template-columns:repeat(7,1fr); text-align:center; margin-bottom:6px; }
+  .dow-row span{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; }
+  .day-grid-lg{ display:grid; grid-template-columns:repeat(7, 1fr); gap:5px; }
+  .day-cell-lg{
+    position:relative; aspect-ratio:1/1; border-radius:9px; background:var(--paper-dim);
+    background-size:cover; background-position:center; display:flex; align-items:flex-start; justify-content:flex-end;
+    padding:4px;
+  }
+  .day-cell-lg.empty{ background:transparent; }
+  .day-cell-lg.has-photo{ cursor:pointer; }
+  .day-cell-lg.has-photo::after{ content:""; position:absolute; inset:0; border-radius:9px; background:linear-gradient(180deg, rgba(24,39,32,0.05), rgba(24,39,32,0.45)); }
+  .day-cell-lg.is-today{ box-shadow:0 0 0 2px var(--gold); }
+  .day-num{ position:relative; z-index:1; font-size:11.5px; font-weight:600; color:var(--ink-soft); }
+  .day-cell-lg.has-photo .day-num{ color:#fff; }
+  .day-count{
+    position:absolute; z-index:1; bottom:4px; left:4px; background:rgba(24,39,32,0.6); color:#fff;
+    font-size:9.5px; font-weight:600; border-radius:8px; padding:1px 5px;
+  }
   .cal-legend{ display:flex; align-items:center; gap:7px; margin-top:16px; font-size:11px; color:var(--ink-soft); }
   .cal-legend .sw{ width:9px;height:9px;border-radius:3px; }
+  .day-view-nav{ margin-bottom:10px; }
+  .day-view-nav .icon-btn{ width:auto; padding:0 4px; font-size:13px; font-weight:500; }
 
   /* ---------- Book ---------- */
   .book-intro p{ color:var(--ink-soft); font-size:13.5px; line-height:1.6; }
@@ -424,6 +440,8 @@ let newPostTaggedIds = [];    // selected member ids to tag on a new post
 let newPostPhotos = [];       // multiple compressed photo dataURLs for a new post
 let newPostLocation = "";
 let mentionActiveIndex = -1;  // for @mention keyboard navigation (reserved)
+let calendarMonthCursor = null; // {year, month} — which month the calendar is showing
+let calendarViewDate = null;    // 'YYYY-MM-DD' when viewing a single day's moments, else null
 let pendingAvatarTarget = null; // "signup" | "editProfile"
 let newPostPhoto = null; // dataURL
 let newPostFavorite = false;
@@ -1582,33 +1600,101 @@ function escapeHtml(s){
 /* Calendar */
 function daysInMonth(year, m){ return new Date(year, m+1, 0).getDate(); }
 function firstWeekdayMon(year, m){ const d = new Date(year, m, 1).getDay(); return (d+6)%7; }
+function shiftDate(dateStr, deltaDays){
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + deltaDays);
+  return d.toISOString().slice(0,10);
+}
 function renderCalendar(group, posts){
-  const year = new Date().getFullYear();
+  if(calendarViewDate) return renderDayView(group, posts, calendarViewDate);
+  return renderMonthView(group, posts);
+}
+function renderMonthView(group, posts){
+  const today = new Date();
+  if(!calendarMonthCursor){ calendarMonthCursor = { year: today.getFullYear(), month: today.getMonth() }; }
+  const { year, month } = calendarMonthCursor;
+  const isCurrentMonth = (year === today.getFullYear() && month === today.getMonth());
+
   const byDate = {};
-  posts.forEach(p => { byDate[p.date] = p; });
-  const monthsHtml = MONTHS_FR.map((mName, mIdx) => {
-    const leading = firstWeekdayMon(year, mIdx);
-    const total = daysInMonth(year, mIdx);
-    let cells = "";
-    for(let i=0;i<leading;i++){ cells += `<div class="day-cell empty"></div>`; }
-    for(let d=1; d<=total; d++){
-      const dateStr = `${year}-${String(mIdx+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-      const post = byDate[dateStr];
-      if(post){
-        cells += `<div class="day-cell has-photo" data-post="${post.id}" style="background-image:url('${post.photo}')"></div>`;
-      } else {
-        cells += `<div class="day-cell"></div>`;
-      }
+  posts.forEach(p => { (byDate[p.date] = byDate[p.date] || []).push(p); });
+
+  const leading = firstWeekdayMon(year, month);
+  const total = daysInMonth(year, month);
+  let cells = "";
+  for(let i=0;i<leading;i++){ cells += `<div class="day-cell-lg empty"></div>`; }
+  for(let d=1; d<=total; d++){
+    const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const dayPosts = byDate[dateStr];
+    const isToday = isCurrentMonth && d === today.getDate();
+    if(dayPosts && dayPosts.length){
+      const cover = dayPosts[dayPosts.length-1].photo;
+      cells += `
+        <div class="day-cell-lg has-photo ${isToday?'is-today':''}" data-daydate="${dateStr}" style="background-image:url('${cover}')">
+          <span class="day-num">${d}</span>
+          ${dayPosts.length > 1 ? `<span class="day-count">${dayPosts.length}</span>` : ""}
+        </div>`;
+    } else {
+      cells += `<div class="day-cell-lg ${isToday?'is-today':''}" data-daydate="${dateStr}"><span class="day-num">${d}</span></div>`;
     }
-    return `<div class="month-block"><div class="month-title">${mName}</div><div class="day-grid">${cells}</div></div>`;
-  }).join("");
+  }
+  const monthPostCount = Object.keys(byDate).filter(d => d.startsWith(`${year}-${String(month+1).padStart(2,"0")}`)).reduce((sum,k)=>sum+byDate[k].length,0);
+
   return `
-    <div class="year-header">
-      <h3>L'année en instants</h3>
-      <span>${year} · ${posts.length} moment${posts.length>1?"s":""} capturé${posts.length>1?"s":""}</span>
+    <div class="month-nav">
+      <button class="icon-btn" style="color:var(--pine)" id="cal-prev-month">‹</button>
+      <div class="month-nav-title">
+        <h3>${MONTHS_FR[month]} ${year}</h3>
+        <span>${monthPostCount} moment${monthPostCount>1?"s":""}</span>
+      </div>
+      <button class="icon-btn" style="color:var(--pine)" id="cal-next-month" ${isCurrentMonth ? "disabled" : ""}>›</button>
     </div>
-    <div class="months-grid">${monthsHtml}</div>
-    <div class="cal-legend"><span class="sw" style="background:var(--gold-soft)"></span> jour partagé — appuie pour l'ouvrir</div>
+    <div class="dow-row">${["L","M","M","J","V","S","D"].map(d=>`<span>${d}</span>`).join("")}</div>
+    <div class="day-grid-lg">${cells}</div>
+    <div class="cal-legend"><span class="sw" style="background:var(--gold-soft)"></span> appuie sur un jour pour voir ses moments</div>
+  `;
+}
+function renderDayView(group, posts, dateStr){
+  const dayPosts = posts.filter(p => p.date === dateStr).sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+  const d = new Date(dateStr + "T00:00:00");
+  const isFuture = shiftDate(dateStr, 1) > todayISO();
+  return `
+    <div class="day-view-nav">
+      <button class="icon-btn" style="color:var(--pine)" id="cal-back-to-month">← Calendrier</button>
+    </div>
+    <div class="month-nav">
+      <button class="icon-btn" style="color:var(--pine)" id="cal-prev-day">‹</button>
+      <div class="month-nav-title">
+        <h3>${d.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" })}</h3>
+        <span>${dayPosts.length} moment${dayPosts.length>1?"s":""}</span>
+      </div>
+      <button class="icon-btn" style="color:var(--pine)" id="cal-next-day" ${isFuture ? "disabled" : ""}>›</button>
+    </div>
+    ${dayPosts.length === 0 ? `
+      <div class="empty-state"><span class="big-emoji">📅</span>Aucun moment partagé ce jour-là.</div>
+    ` : `
+      <div class="feed">
+        ${dayPosts.map(p => `
+          <article class="post-card" data-post="${p.id}">
+            <div class="post-head">
+              ${avatarHtml(p.authorName, p.authorAvatarColor, p.authorAvatarPhoto, "width:28px;height:28px;font-size:12px;")}
+              <span class="name">${escapeHtml(p.authorName)}</span>
+              <span class="date">${formatTime(p.createdAt)}</span>
+            </div>
+            ${renderCarousel(p.photos, "carousel-day-" + p.id)}
+            <div class="post-body">
+              <p class="post-caption">${escapeHtml(p.caption)}</p>
+              ${p.location ? `<p class="location-line">📍 ${escapeHtml(p.location)}</p>` : ""}
+              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">🏷️ avec ${p.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
+              <div class="post-foot">
+                ${Object.entries(reactionCounts(p)).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
+                <span>💬 ${p.comments.length}</span>
+                ${p.favorite ? `<span>⭐ dans le livre</span>` : ""}
+              </div>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    `}
   `;
 }
 
@@ -1643,6 +1729,7 @@ function bindGroupScreen(){
   document.querySelectorAll(".seg-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       activeView = btn.dataset.view;
+      if(activeView === "calendrier"){ calendarMonthCursor = null; calendarViewDate = null; }
       document.querySelectorAll(".seg-btn").forEach(b=>b.classList.toggle("active", b===btn));
       renderGroupContentOnly();
     });
@@ -1677,6 +1764,44 @@ function attachContentHandlers(){
   }); }
   const orderBtn = document.getElementById("order-book");
   if(orderBtn){ orderBtn.addEventListener("click", ()=> showToast("Commande envoyée — le livre sera imprimé et posté à chaque membre 📖")); }
+
+  // Calendar: month grid navigation
+  const prevMonthBtn = document.getElementById("cal-prev-month");
+  if(prevMonthBtn){ prevMonthBtn.addEventListener("click", ()=>{
+    calendarMonthCursor.month -= 1;
+    if(calendarMonthCursor.month < 0){ calendarMonthCursor.month = 11; calendarMonthCursor.year -= 1; }
+    renderGroupContentOnly();
+  }); }
+  const nextMonthBtn = document.getElementById("cal-next-month");
+  if(nextMonthBtn && !nextMonthBtn.disabled){ nextMonthBtn.addEventListener("click", ()=>{
+    calendarMonthCursor.month += 1;
+    if(calendarMonthCursor.month > 11){ calendarMonthCursor.month = 0; calendarMonthCursor.year += 1; }
+    renderGroupContentOnly();
+  }); }
+  document.querySelectorAll("[data-daydate]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      calendarViewDate = el.dataset.daydate;
+      renderGroupContentOnly();
+    });
+  });
+
+  // Calendar: single-day view navigation
+  const backToMonthBtn = document.getElementById("cal-back-to-month");
+  if(backToMonthBtn){ backToMonthBtn.addEventListener("click", ()=>{
+    calendarViewDate = null;
+    renderGroupContentOnly();
+  }); }
+  const prevDayBtn = document.getElementById("cal-prev-day");
+  if(prevDayBtn){ prevDayBtn.addEventListener("click", ()=>{
+    calendarViewDate = shiftDate(calendarViewDate, -1);
+    renderGroupContentOnly();
+  }); }
+  const nextDayBtn = document.getElementById("cal-next-day");
+  if(nextDayBtn && !nextDayBtn.disabled){ nextDayBtn.addEventListener("click", ()=>{
+    calendarViewDate = shiftDate(calendarViewDate, 1);
+    renderGroupContentOnly();
+  }); }
+
   document.querySelectorAll("[data-post]").forEach(el=>{
     el.addEventListener("click", ()=>{
       activeModalPostId = el.dataset.post;

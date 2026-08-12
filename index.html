@@ -1819,7 +1819,7 @@ function bindGroupScreen(){
     modalType = "addPost"; renderOverlay(); openOverlay();
     if(!memberProfilesCache[activeGroupId]){
       await loadGroupMemberProfiles(activeGroupId);
-      if(modalType === "addPost"){ renderOverlay(); bindAddPostSheet(); }
+      if(modalType === "addPost"){ renderOverlay(); }
     }
   });
   attachContentHandlers();
@@ -2052,14 +2052,14 @@ function renderAdjustNewPhotoCropSheet(){
 }
 function bindAdjustNewPhotoCropSheet(){
   document.getElementById("close-sheet").addEventListener("click", ()=>{
-    modalType = "addPost"; renderOverlay(); bindAddPostSheet();
+    modalType = "addPost"; renderOverlay();
   });
   document.querySelectorAll("[data-newphoto-index]").forEach(el=>{
     el.addEventListener("click", ()=>{
       adjustNewPhotoIndex = Number(el.dataset.newphotoIndex);
       const p = newPostPhotos[adjustNewPhotoIndex];
       adjustFocusX = p.focusX; adjustFocusY = p.focusY;
-      renderOverlay(); bindAdjustNewPhotoCropSheet();
+      renderOverlay();
     });
   });
   const fullWrap = document.getElementById("crop-full-wrap");
@@ -2079,7 +2079,7 @@ function bindAdjustNewPhotoCropSheet(){
     newPostPhotos[adjustNewPhotoIndex].focusX = adjustFocusX;
     newPostPhotos[adjustNewPhotoIndex].focusY = adjustFocusY;
     modalType = "addPost";
-    renderOverlay(); bindAddPostSheet();
+    renderOverlay();
   });
 }
 
@@ -2121,14 +2121,14 @@ function bindAdjustCropSheet(){
   const group = getGroup(activeGroupId);
   const post = postsCache[group.id].find(p => p.id === adjustCropPostId);
   document.getElementById("close-sheet").addEventListener("click", ()=>{
-    modalType = "postDetail"; renderOverlay(); bindPostDetailSheet();
+    modalType = "postDetail"; renderOverlay();
   });
   document.querySelectorAll("[data-photo-index]").forEach(el=>{
     el.addEventListener("click", ()=>{
       adjustCropPhotoIndex = Number(el.dataset.photoIndex);
       const p = post.photos[adjustCropPhotoIndex];
       adjustFocusX = p.focusX; adjustFocusY = p.focusY;
-      renderOverlay(); bindAdjustCropSheet();
+      renderOverlay();
     });
   });
   const fullWrap = document.getElementById("crop-full-wrap");
@@ -2152,7 +2152,7 @@ function bindAdjustCropSheet(){
     await loadGroupPosts(group.id);
     btn.disabled = false; btn.textContent = "Enregistrer ce cadrage";
     modalType = "postDetail";
-    renderOverlay(); bindPostDetailSheet();
+    renderOverlay();
     renderGroupContentOnly();
     showToast("Cadrage mis à jour ✅");
   });
@@ -2211,12 +2211,12 @@ function bindEditProfileSheet(){
   const removeBtn = document.getElementById("remove-avatar-btn");
   if(removeBtn){ removeBtn.addEventListener("click", ()=>{
     editProfilePhoto = null;
-    renderOverlay(); bindEditProfileSheet();
+    renderOverlay();
   }); }
   document.querySelectorAll("#edit-color-picker .color-swatch").forEach(sw=>{
     sw.addEventListener("click", ()=>{
       selectedColor = sw.dataset.color;
-      renderOverlay(); bindEditProfileSheet();
+      renderOverlay();
     });
   });
   document.getElementById("save-profile-btn").addEventListener("click", async (e)=>{
@@ -2377,14 +2377,14 @@ function bindPostDetailSheet(){
       const emoji = btn.dataset.emoji;
       await setReaction(activeModalPostId, emoji);
       await loadGroupPosts(group.id);
-      renderOverlay(); bindPostDetailSheet();
+      renderOverlay();
       renderGroupContentOnly();
     });
   });
   document.getElementById("fav-toggle").addEventListener("click", async ()=>{
     await setPostFavorite(activeModalPostId, !post.favorite);
     await loadGroupPosts(group.id);
-    renderOverlay(); bindPostDetailSheet();
+    renderOverlay();
     renderGroupContentOnly();
   });
   document.getElementById("reply-add-btn").addEventListener("click", ()=>{
@@ -2398,7 +2398,7 @@ function bindPostDetailSheet(){
     editBtn.addEventListener("click", ()=>{
       postEditMode = !postEditMode;
       editPostNewPhoto = null;
-      renderOverlay(); bindPostDetailSheet();
+      renderOverlay();
     });
   }
   const changePhotoBtn = document.getElementById("change-photo-btn");
@@ -2430,7 +2430,7 @@ function bindPostDetailSheet(){
       await editPost(activeModalPostId, fields);
       await loadGroupPosts(group.id);
       postEditMode = false; editPostNewPhoto = null;
-      renderOverlay(); bindPostDetailSheet();
+      renderOverlay();
       renderGroupContentOnly();
       showToast("Photo mise à jour ✅");
     });
@@ -2451,7 +2451,7 @@ function bindPostDetailSheet(){
   document.querySelectorAll(".edit-comment-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       editingCommentId = btn.dataset.comment;
-      renderOverlay(); bindPostDetailSheet();
+      renderOverlay();
     });
   });
   document.querySelectorAll(".save-comment-edit-btn").forEach(btn=>{
@@ -2462,7 +2462,7 @@ function bindPostDetailSheet(){
       await editComment(btn.dataset.comment, val);
       await loadGroupPosts(group.id);
       editingCommentId = null;
-      renderOverlay(); bindPostDetailSheet();
+      renderOverlay();
     });
   });
 
@@ -2515,7 +2515,7 @@ function bindPostDetailSheet(){
     await insertComment(activeModalPostId, val);
     await loadGroupPosts(group.id);
     commentSubmitting = false;
-    renderOverlay(); bindPostDetailSheet();
+    renderOverlay();
     renderGroupContentOnly();
   }
   sendBtn.addEventListener("click", submitComment);
@@ -2527,7 +2527,7 @@ document.getElementById("edit-photo-file").addEventListener("change", async (e)=
   if(!file || !pendingEditPostId) return;
   editPostNewPhoto = await compressImage(file);
   pendingEditPostId = null;
-  if(modalType === "postDetail"){ renderOverlay(); bindPostDetailSheet(); }
+  if(modalType === "postDetail"){ renderOverlay(); }
   showToast("Nouvelle photo prête — clique \"Enregistrer\" pour valider");
 });
 document.getElementById("reply-file").addEventListener("change", async (e)=>{
@@ -2539,7 +2539,7 @@ document.getElementById("reply-file").addEventListener("change", async (e)=>{
   await insertReply(replyToId, dataUrl);
   await loadGroupPosts(group.id);
   e.target.value = "";
-  renderOverlay(); bindPostDetailSheet();
+  renderOverlay();
   showToast("Photo ajoutée en réponse 📸");
 });
 document.getElementById("avatar-file").addEventListener("change", async (e)=>{
@@ -2552,7 +2552,7 @@ document.getElementById("avatar-file").addEventListener("change", async (e)=>{
     render();
   } else if(pendingAvatarTarget === "editProfile"){
     editProfilePhoto = dataUrl;
-    renderOverlay(); bindEditProfileSheet();
+    renderOverlay();
   }
   pendingAvatarTarget = null;
 });
@@ -2619,7 +2619,7 @@ function bindAddPostSheet(){
     btn.addEventListener("click", (e)=>{
       e.stopPropagation();
       newPostPhotos.splice(Number(btn.dataset.index), 1);
-      renderOverlay(); bindAddPostSheet();
+      renderOverlay();
     });
   });
   document.querySelectorAll("[data-adjust-index]").forEach(el=>{
@@ -2648,7 +2648,7 @@ function bindAddPostSheet(){
         newPostLocation = place || `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
       }catch(e){ showToast("Impossible de récupérer le lieu."); }
       btn.textContent = "📍";
-      renderOverlay(); bindAddPostSheet();
+      renderOverlay();
     }, ()=>{ btn.textContent = "📍"; showToast("Localisation refusée ou indisponible."); }, { timeout: 8000 });
   });
   document.querySelectorAll(".tag-person-checkbox").forEach(cb=>{
@@ -2681,11 +2681,19 @@ function bindAddPostSheet(){
 document.getElementById("hidden-file").addEventListener("change", async (e)=>{
   const files = Array.from(e.target.files || []);
   if(!files.length) return;
-  for(const file of files){
-    newPostPhotos.push({ url: await compressImage(file), focusX: 50, focusY: 50 });
+  const addZone = document.getElementById("add-photo-zone");
+  if(addZone) addZone.style.opacity = "0.5";
+  try{
+    for(const file of files){
+      const compressed = await compressImage(file);
+      newPostPhotos.push({ url: compressed, focusX: 50, focusY: 50 });
+    }
+  }catch(err){
+    console.error("photo upload error", err);
+    showToast("⚠️ Erreur lors du chargement : " + (err && err.message ? err.message : "inconnue"));
   }
   e.target.value = "";
-  if(modalType === "addPost"){ renderOverlay(); bindAddPostSheet(); }
+  if(modalType === "addPost"){ renderOverlay(); }
 });
 
 function inviteLink(group){

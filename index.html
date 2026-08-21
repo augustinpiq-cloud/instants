@@ -414,6 +414,47 @@
   .lightbox-dots .carousel-dot{ width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.4); }
   .lightbox-dots .carousel-dot.active{ background:#fff; }
 
+  .story-bar{ display:flex; gap:14px; padding:4px 4px 16px; overflow-x:auto; }
+  .story-circle{ display:flex; flex-direction:column; align-items:center; gap:5px; flex-shrink:0; width:64px; cursor:pointer; }
+  .story-ring{
+    width:60px; height:60px; border-radius:50%; padding:2.5px;
+    background:linear-gradient(135deg, var(--gold), var(--rose), var(--teal));
+  }
+  .story-ring img{ width:100%; height:100%; border-radius:50%; object-fit:cover; display:block; border:2px solid var(--paper); }
+  .story-label{ font-size:10.5px; color:var(--ink-soft); text-align:center; white-space:nowrap; }
+
+  .story-viewer{
+    position:fixed; inset:0; background:#000; z-index:90; display:none;
+    align-items:center; justify-content:center; overflow:hidden;
+  }
+  .story-viewer.open{ display:flex; }
+  .story-viewer #story-img{ max-width:100%; max-height:100%; width:100%; height:100%; object-fit:contain; background:#000; }
+  .story-progress{
+    position:absolute; top:max(10px, env(safe-area-inset-top)); left:10px; right:10px; z-index:3;
+    display:flex; gap:4px;
+  }
+  .story-seg{ flex:1; height:3px; border-radius:2px; background:rgba(255,255,255,0.3); overflow:hidden; }
+  .story-seg-fill{ height:100%; width:0%; background:#fff; }
+  .story-seg-fill.full{ width:100%; }
+  .story-seg-fill.active{ animation:storyfill linear forwards; animation-duration:4s; }
+  @keyframes storyfill{ from{ width:0%; } to{ width:100%; } }
+  .story-header{
+    position:absolute; top:max(24px, calc(env(safe-area-inset-top) + 14px)); left:12px; right:12px; z-index:3;
+    display:flex; align-items:center; gap:9px; color:#fff;
+  }
+  .story-header-text{ display:flex; flex-direction:column; line-height:1.25; }
+  .story-header-text strong{ font-size:13px; }
+  .story-header-text span{ font-size:10.5px; color:rgba(255,255,255,0.7); font-family:'IBM Plex Mono', monospace; }
+  .story-month-label{ margin-left:auto; font-size:11px; color:rgba(255,255,255,0.7); font-family:'IBM Plex Mono', monospace; }
+  .story-close{ all:unset; cursor:pointer; color:#fff; font-size:16px; padding:4px; }
+  .story-caption{
+    position:absolute; bottom:max(24px, env(safe-area-inset-bottom)); left:16px; right:16px; z-index:3;
+    color:#fff; font-size:13.5px; text-align:center; text-shadow:0 1px 4px rgba(0,0,0,0.6);
+  }
+  .story-tap-zone{ position:absolute; top:0; bottom:0; width:35%; z-index:2; }
+  .story-tap-prev{ left:0; }
+  .story-tap-next{ left:35%; width:65%; }
+
   .install-banner{
     display:flex; align-items:center; gap:8px;
     background:var(--gold-soft); color:var(--pine-deep);
@@ -446,6 +487,22 @@
     <img id="lightbox-img" src="" alt=""/>
   </div>
   <div class="lightbox-dots" id="lightbox-dots"></div>
+</div>
+<div class="story-viewer" id="story-viewer">
+  <div class="story-progress" id="story-progress"></div>
+  <div class="story-header">
+    <span id="story-author-avatar"></span>
+    <div class="story-header-text">
+      <strong id="story-author"></strong>
+      <span id="story-time"></span>
+    </div>
+    <span class="story-month-label" id="story-month-label"></span>
+    <button class="story-close" id="story-close">✕</button>
+  </div>
+  <img id="story-img" src="" alt=""/>
+  <p class="story-caption" id="story-caption"></p>
+  <div class="story-tap-zone story-tap-prev" id="story-tap-prev"></div>
+  <div class="story-tap-zone story-tap-next" id="story-tap-next"></div>
 </div>
 <div class="toast" id="toast"></div>
 <input type="file" id="hidden-file" accept="image/*" multiple style="display:none" />
@@ -563,6 +620,10 @@ let pendingEditPostId = null;
 let adjustCropPostId = null;
 let adjustCropPhotoIndex = 0;
 let adjustNewPhotoIndex = 0;
+let storyMonthsGlobal = [];
+let storyMonthIndex = 0;
+let storyFrameIndex = 0;
+let storyTimer = null;
 let adjustFocusX = 50;
 let adjustFocusY = 50;
 let memberProfilesCache = {}; // groupId -> [{id, displayName, avatarColor, avatarPhoto}]
@@ -1676,9 +1737,47 @@ function renderGroupBody(group, posts){
   if(activeView === "calendrier") return renderCalendar(group, posts);
   return renderFeed(group, posts);
 }
+function buildStoryMonths(posts){
+  const buckets = {};
+  posts.forEach(p => {
+    const key = p.date.slice(0,7); // YYYY-MM
+    if(!buckets[key]) buckets[key] = [];
+    (p.photos || []).forEach(photo => {
+      buckets[key].push({
+        postId: p.id, photo,
+        authorName: p.authorName, authorAvatarColor: p.authorAvatarColor, authorAvatarPhoto: p.authorAvatarPhoto,
+        caption: p.caption, createdAt: p.createdAt, date: p.date
+      });
+    });
+  });
+  Object.values(buckets).forEach(arr => arr.sort((a,b)=> new Date(a.createdAt) - new Date(b.createdAt)));
+  const keys = Object.keys(buckets).sort((a,b)=> b.localeCompare(a)); // most recent month first
+  return keys.map(key => {
+    const [y, m] = key.split("-");
+    return { key, label: MONTHS_FR[parseInt(m,10)-1].slice(0,3) + " " + y.slice(2), frames: buckets[key] };
+  });
+}
+function renderStoryBar(storyMonths){
+  if(!storyMonths.length) return "";
+  return `
+    <div class="story-bar">
+      ${storyMonths.map((m, i) => {
+        const cover = m.frames[m.frames.length - 1].photo;
+        return `
+          <div class="story-circle" data-month-index="${i}">
+            <div class="story-ring"><img src="${cover.url}" style="object-position:${cover.focusX}% ${cover.focusY}%" alt=""/></div>
+            <span class="story-label">${m.label}</span>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
 function renderFeed(group, posts){
   const sorted = [...posts].sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+  storyMonthsGlobal = buildStoryMonths(posts);
   return `
+    ${renderStoryBar(storyMonthsGlobal)}
     <div class="refresh-row"><button class="refresh-btn" id="refresh-btn">🔄 Actualiser</button></div>
     ${sorted.length === 0 ? `
       <div class="empty-state">
@@ -1918,6 +2017,9 @@ function renderGroupContentOnly(){
 }
 function attachContentHandlers(){
   bindCarousels();
+  document.querySelectorAll("[data-month-index]").forEach(el=>{
+    el.addEventListener("click", ()=> openStoryViewer(Number(el.dataset.monthIndex), 0));
+  });
   const refreshBtn = document.getElementById("refresh-btn");
   if(refreshBtn){ refreshBtn.addEventListener("click", async ()=>{
     await loadGroupPosts(activeGroupId);
@@ -1981,6 +2083,69 @@ function attachContentHandlers(){
 function openOverlay(){ document.getElementById("overlay").classList.add("open"); }
 function closeOverlay(){ document.getElementById("overlay").classList.remove("open"); modalType = null; }
 document.getElementById("overlay").addEventListener("click", (e)=>{ if(e.target.id === "overlay") closeOverlay(); });
+
+/* ===================== Stories (month recap, Instagram-style) ===================== */
+const STORY_FRAME_MS = 4000;
+
+function openStoryViewer(monthIndex, frameIndex){
+  storyMonthIndex = monthIndex;
+  storyFrameIndex = frameIndex || 0;
+  document.getElementById("story-viewer").classList.add("open");
+  renderStoryFrame();
+}
+function closeStoryViewer(){
+  clearTimeout(storyTimer);
+  document.getElementById("story-viewer").classList.remove("open");
+}
+function renderStoryFrame(){
+  clearTimeout(storyTimer);
+  const month = storyMonthsGlobal[storyMonthIndex];
+  if(!month) { closeStoryViewer(); return; }
+  const frame = month.frames[storyFrameIndex];
+
+  const bar = document.getElementById("story-progress");
+  bar.innerHTML = month.frames.map((_, i) => `
+    <div class="story-seg"><div class="story-seg-fill ${i < storyFrameIndex ? 'full' : ''} ${i === storyFrameIndex ? 'active' : ''}" style="${i===storyFrameIndex? 'animation-duration:'+STORY_FRAME_MS+'ms;':''}"></div></div>
+  `).join("");
+
+  document.getElementById("story-img").src = frame.photo.url;
+  document.getElementById("story-img").style.objectFit = "contain";
+  document.getElementById("story-author-avatar").innerHTML = avatarHtml(frame.authorName, frame.authorAvatarColor, frame.authorAvatarPhoto, "width:26px;height:26px;font-size:11px;");
+  document.getElementById("story-author").textContent = frame.authorName;
+  document.getElementById("story-time").textContent = formatDateShort(frame.date) + " · " + formatTime(frame.createdAt);
+  document.getElementById("story-caption").textContent = frame.caption && frame.caption !== "…" ? frame.caption : "";
+  document.getElementById("story-month-label").textContent = month.label;
+
+  storyTimer = setTimeout(nextStoryFrame, STORY_FRAME_MS);
+}
+function nextStoryFrame(){
+  const month = storyMonthsGlobal[storyMonthIndex];
+  if(storyFrameIndex < month.frames.length - 1){
+    storyFrameIndex++;
+    renderStoryFrame();
+  } else if(storyMonthIndex < storyMonthsGlobal.length - 1){
+    storyMonthIndex++;
+    storyFrameIndex = 0;
+    renderStoryFrame();
+  } else {
+    closeStoryViewer();
+  }
+}
+function prevStoryFrame(){
+  if(storyFrameIndex > 0){
+    storyFrameIndex--;
+    renderStoryFrame();
+  } else if(storyMonthIndex > 0){
+    storyMonthIndex--;
+    storyFrameIndex = storyMonthsGlobal[storyMonthIndex].frames.length - 1;
+    renderStoryFrame();
+  } else {
+    renderStoryFrame();
+  }
+}
+document.getElementById("story-close").addEventListener("click", closeStoryViewer);
+document.getElementById("story-tap-prev").addEventListener("click", prevStoryFrame);
+document.getElementById("story-tap-next").addEventListener("click", nextStoryFrame);
 
 /* ===================== Lightbox (fullscreen zoomable photo viewer) ===================== */
 let lightboxPhotos = [];
@@ -2820,7 +2985,7 @@ function bindInviteSheet(){
   });
 }
 
-document.addEventListener("keydown", (e)=>{ if(e.key === "Escape"){ closeLightbox(); closeOverlay(); } });
+document.addEventListener("keydown", (e)=>{ if(e.key === "Escape"){ closeLightbox(); closeOverlay(); closeStoryViewer(); } });
 document.getElementById("lightbox").addEventListener("click", (e)=>{
   if(e.target.id === "lightbox" && lbScale <= 1) closeLightbox();
 });

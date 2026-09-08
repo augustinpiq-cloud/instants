@@ -275,14 +275,14 @@
 
   /* ---------- FAB ---------- */
   .fab{
-    position:absolute; right:20px; bottom:86px;
+    position:absolute; left:50%; bottom:86px; transform:translateX(-50%);
     width:56px;height:56px;border-radius:50%;
     background:linear-gradient(135deg, var(--gold), var(--teal)); color:#fff;
     display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:600;
     box-shadow:0 10px 26px -6px rgba(201,162,76,0.55);
     border:none; cursor:pointer; z-index:5; transition:transform 0.15s ease;
   }
-  .fab:active{ transform:scale(0.94); }
+  .fab:active{ transform:translateX(-50%) scale(0.94); }
   .fab:hover{ box-shadow:0 12px 30px -6px rgba(76,122,108,0.45); }
 
   /* ---------- Overlay / modal ---------- */

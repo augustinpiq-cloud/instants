@@ -6,13 +6,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Instants">
+<meta name="apple-mobile-web-app-title" content="Moments">
 <meta name="theme-color" content="#1F3329">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="manifest" href="manifest.json">
-<title>Instants — le carnet du groupe</title>
+<title>Moments — le carnet du groupe</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1105,7 +1105,7 @@ function renderInstallBanner(){
     return `
       <div class="install-banner">
         <span class="ib-icon">${icon("smartphone",16)}</span>
-        <span class="ib-text">Installe Instants comme une appli sur ton téléphone.</span>
+        <span class="ib-text">Installe Moments comme une appli sur ton téléphone.</span>
         <button class="ib-action" id="install-action">Installer</button>
         <button class="ib-dismiss" id="install-dismiss">✕</button>
       </div>
@@ -1115,7 +1115,7 @@ function renderInstallBanner(){
     return `
       <div class="install-banner">
         <span class="ib-icon">${icon("smartphone",16)}</span>
-        <span class="ib-text">Installe Instants sur ton écran d'accueil pour l'ouvrir comme une vraie appli.</span>
+        <span class="ib-text">Installe Moments sur ton écran d'accueil pour l'ouvrir comme une vraie appli.</span>
         <button class="ib-action" id="install-help-open">Comment faire</button>
         <button class="ib-dismiss" id="install-dismiss">✕</button>
       </div>
@@ -1206,8 +1206,8 @@ function renderLoading(){
     <div class="center-screen">
       <div class="brand-block">
         <span class="brand-mark"></span>
-        <h1 class="brand-title">Instants</h1>
-        <span class="brand-sub">Nos moments de vie</span>
+        <h1 class="brand-title">Moments</h1>
+        <span class="brand-sub">Nos instants de vie</span>
       </div>
       <div class="spinner"></div>
     </div>
@@ -1223,7 +1223,7 @@ function renderAuth(){
       <div class="center-screen" style="justify-content:flex-start; padding-top:56px;">
         <div class="brand-block" style="margin-bottom:22px;">
           <span class="brand-mark"></span>
-          <h1 class="brand-title">Instants</h1>
+          <h1 class="brand-title">Moments</h1>
           <span class="brand-sub">Le carnet du groupe</span>
         </div>
         <div class="auth-card">
@@ -1294,7 +1294,7 @@ function renderForgotPasswordScreen(){
       <div class="center-screen" style="justify-content:flex-start; padding-top:64px;">
         <div class="brand-block" style="margin-bottom:26px;">
           <span class="brand-mark"></span>
-          <h1 class="brand-title">Instants</h1>
+          <h1 class="brand-title">Moments</h1>
           <span class="brand-sub">Le carnet du groupe</span>
         </div>
         <div class="auth-card">
@@ -1317,7 +1317,7 @@ function renderResetPasswordScreen(){
     <div class="center-screen" style="justify-content:flex-start; padding-top:64px;">
       <div class="brand-block" style="margin-bottom:26px;">
         <span class="brand-mark"></span>
-        <h1 class="brand-title">Instants</h1>
+        <h1 class="brand-title">Moments</h1>
         <span class="brand-sub">Choisis un nouveau mot de passe</span>
       </div>
       <div class="auth-card">
@@ -2644,7 +2644,7 @@ function bindEditProfileSheet(){
 function renderInstallHelpSheet(){
   return `
     <div class="sheet-head">
-      <h4>Installer Instants</h4>
+      <h4>Installer Moments</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
@@ -3109,7 +3109,7 @@ function bindInviteSheet(){
   document.getElementById("share-link").addEventListener("click", async ()=>{
     const link = inviteLink(group);
     if(navigator.share){
-      try{ await navigator.share({ title: "Rejoins " + group.name + " sur Instants", url: link }); }
+      try{ await navigator.share({ title: "Rejoins " + group.name + " sur Moments", url: link }); }
       catch(e){ /* user cancelled share, no-op */ }
     } else {
       try{ await navigator.clipboard.writeText(link); showToast("Lien copié !"); }

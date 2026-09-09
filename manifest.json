@@ -1,6 +1,6 @@
 {
-  "name": "Instants — le carnet du groupe",
-  "short_name": "Instants",
+  "name": "Moments — le carnet du groupe",
+  "short_name": "Moments",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#182720",

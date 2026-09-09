@@ -1104,7 +1104,7 @@ function renderInstallBanner(){
   if(deferredInstallPrompt){
     return `
       <div class="install-banner">
-        <span class="ib-icon">📲</span>
+        <span class="ib-icon">${icon("smartphone",16)}</span>
         <span class="ib-text">Installe Instants comme une appli sur ton téléphone.</span>
         <button class="ib-action" id="install-action">Installer</button>
         <button class="ib-dismiss" id="install-dismiss">✕</button>
@@ -1114,7 +1114,7 @@ function renderInstallBanner(){
   if(isIOS()){
     return `
       <div class="install-banner">
-        <span class="ib-icon">📲</span>
+        <span class="ib-icon">${icon("smartphone",16)}</span>
         <span class="ib-text">Installe Instants sur ton écran d'accueil pour l'ouvrir comme une vraie appli.</span>
         <button class="ib-action" id="install-help-open">Comment faire</button>
         <button class="ib-dismiss" id="install-dismiss">✕</button>
@@ -1232,7 +1232,7 @@ function renderAuth(){
             <button class="auth-tab ${authMode==='signup'?'active':''}" data-mode="signup">Créer un compte</button>
           </div>
           ${authMode === "login" ? renderLoginForm() : renderSignupForm()}
-          ${pendingJoinCode ? `<p class="helper-text" style="color:var(--teal);">🔑 Tu as été invité·e à rejoindre un groupe — connecte-toi ou crée un compte pour y accéder directement.</p>` : ""}
+          ${pendingJoinCode ? `<p class="helper-text" style="color:var(--teal);">${icon("key",14)} Tu as été invité·e à rejoindre un groupe — connecte-toi ou crée un compte pour y accéder directement.</p>` : ""}
         </div>
       </div>
     </div>
@@ -1281,7 +1281,7 @@ function renderSignupForm(){
     <div class="field">
       <label>Photo de profil (facultatif)</label>
       <div class="avatar-upload-zone" id="signup-avatar-zone">
-        ${signupPhoto ? `<img src="${signupPhoto}" alt=""/>` : `<span>📷 Ajouter</span>`}
+        ${signupPhoto ? `<img src="${signupPhoto}" alt=""/>` : `<span>${icon("camera",15)} Ajouter</span>`}
       </div>
     </div>
     <button class="btn-primary" id="signup-submit">Créer mon compte</button>
@@ -1465,7 +1465,7 @@ function renderHomeScreen(){
       <div class="home-content">
         ${groups.length === 0 ? `
           <div class="empty-state">
-            <span class="big-emoji">📔</span>
+            <span class="big-emoji">${icon("book",40)}</span>
             Tu n'as pas encore de carnet.<br/>Crée un groupe ou rejoins celui de tes amis avec leur code.
           </div>
         ` : `
@@ -1475,7 +1475,7 @@ function renderHomeScreen(){
             const unseen = unseenCountFor(g.id);
             return `
               <div class="group-card" data-group="${g.id}">
-                ${last ? `<img class="group-thumb" src="${last.photo}" style="object-position:${last.photoStyle ? last.photoStyle.replace('object-position:','') : '50% 50%'}" alt=""/>` : `<div class="group-thumb placeholder">📷</div>`}
+                ${last ? `<img class="group-thumb" src="${last.photo}" style="object-position:${last.photoStyle ? last.photoStyle.replace('object-position:','') : '50% 50%'}" alt=""/>` : `<div class="group-thumb placeholder">${icon("camera",20)}</div>`}
                 <div class="info">
                   <p class="gname">${escapeHtml(g.name)}</p>
                   <p class="gmeta">${g.memberUsernames.length} membre${g.memberUsernames.length>1?"s":""} · ${posts.length} moment${posts.length>1?"s":""}</p>
@@ -1488,7 +1488,7 @@ function renderHomeScreen(){
         `}
         <div class="home-actions">
           <button class="btn-primary" id="go-create-group">+ Créer un groupe</button>
-          <button class="btn-secondary" id="go-join-group">🔑 Rejoindre avec un code</button>
+          <button class="btn-secondary" id="go-join-group">${icon("key",15)} Rejoindre avec un code</button>
         </div>
       </div>
     </div>
@@ -1556,7 +1556,7 @@ function renderMyPhotosSection(){
   }
   const mine = myAuthoredPosts();
   if(mine.length === 0){
-    return `<div class="empty-state" style="padding:20px 10px;"><span class="big-emoji">📷</span>Tu n'as encore rien publié.</div>`;
+    return `<div class="empty-state" style="padding:20px 10px;"><span class="big-emoji">${icon("camera",40)}</span>Tu n'as encore rien publié.</div>`;
   }
   return `
     <div class="my-photos-grid">
@@ -1604,12 +1604,12 @@ function renderProfileScreen(){
         </div>
         <p class="section-label">${groups.length} groupe${groups.length>1?"s":""}</p>
         <div class="profile-list">
-          ${groups.map(g => `<div class="list-row" data-group="${g.id}"><span>📔</span> ${escapeHtml(g.name)}</div>`).join("")}
-          <div class="list-row" id="edit-profile-btn" style="margin-top:14px;"><span>✏️</span> Modifier mon profil</div>
-          <div class="list-row" id="push-toggle-btn"><span>🔔</span> <span id="push-toggle-label">Notifications</span></div>
-          <div class="list-row" id="fix-old-posts-btn"><span>🔧</span> Corriger mes anciennes publications</div>
-          <div class="list-row" id="install-help-btn"><span>📲</span> Comment installer l'appli ?</div>
-          <div class="list-row" id="logout-btn"><span>🚪</span> <span class="danger" style="color:var(--danger)">Se déconnecter</span></div>
+          ${groups.map(g => `<div class="list-row" data-group="${g.id}"><span>${icon("book",16)}</span> ${escapeHtml(g.name)}</div>`).join("")}
+          <div class="list-row" id="edit-profile-btn" style="margin-top:14px;"><span>${icon("pencil",16)}</span> Modifier mon profil</div>
+          <div class="list-row" id="push-toggle-btn"><span>${icon("bell",16)}</span> <span id="push-toggle-label">Notifications</span></div>
+          <div class="list-row" id="fix-old-posts-btn"><span>${icon("wrench",16)}</span> Corriger mes anciennes publications</div>
+          <div class="list-row" id="install-help-btn"><span>${icon("smartphone",16)}</span> Comment installer l'appli ?</div>
+          <div class="list-row" id="logout-btn"><span>${icon("logout",16)}</span> <span class="danger" style="color:var(--danger)">Se déconnecter</span></div>
         </div>
         <p class="section-label" style="margin-top:26px;">Mes photos</p>
         <div id="my-photos-section">${renderMyPhotosSection()}</div>
@@ -1788,8 +1788,8 @@ function renderGroupScreen(){
     <div class="app-header">
       <button class="icon-btn" id="back-btn">←</button>
       <h2>${escapeHtml(group.name)}</h2>
-      <button class="icon-btn" id="invite-btn" title="Inviter">🔑</button>
-      <button class="icon-btn" id="book-btn" title="Livre de l'année">📖</button>
+      <button class="icon-btn" id="invite-btn" title="Inviter">${icon("key",18)}</button>
+      <button class="icon-btn" id="book-btn" title="Livre de l'année">${icon("bookOpen",18)}</button>
     </div>
     <div class="segmented">
       <button class="seg-btn ${activeView==='fil'?'active':''}" data-view="fil">Fil</button>
@@ -1852,7 +1852,7 @@ function renderFeed(group, posts){
     ${renderStoryBar(storyMonthsGlobal)}
     ${sorted.length === 0 ? `
       <div class="empty-state">
-        <span class="big-emoji">📸</span>
+        <span class="big-emoji">${icon("camera",40)}</span>
         Aucune photo pour l'instant.<br/>Appuie sur + pour partager le premier moment.
       </div>
     ` : `
@@ -1867,11 +1867,11 @@ function renderFeed(group, posts){
             ${renderCarousel(p.photos, "carousel-feed-" + p.id)}
             <div class="post-body">
               <p class="post-caption">${escapeHtml(p.caption)}</p>
-              ${p.location ? `<p class="location-line">📍 ${escapeHtml(p.location)}</p>` : ""}
-              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">🏷️ avec ${p.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
+              ${p.location ? `<p class="location-line">${icon("pin",13)} ${escapeHtml(p.location)}</p>` : ""}
+              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">${icon("tag",13)} avec ${p.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
               <div class="post-foot">
                 ${Object.entries(reactionCounts(p)).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
-                <span>💬 ${p.comments.length}</span>
+                <span>${icon("comment",14)} ${p.comments.length}</span>
                 ${p.favorite ? `<span>⭐ dans le livre</span>` : ""}
               </div>
             </div>
@@ -1881,6 +1881,31 @@ function renderFeed(group, posts){
     `}
   `;
 }
+const ICONS = {
+  camera: '<path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.2"/>',
+  pin: '<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.3"/>',
+  smartphone: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
+  key: '<circle cx="7.5" cy="14.5" r="4"/><path d="M10.5 11.5 19 3"/><path d="M15 7l3 3"/><path d="M17.5 4.5l2.5 2.5"/>',
+  pencil: '<path d="M4 20l4-1 11-11-3-3L5 16l-1 4Z"/><path d="M13.5 6.5l3 3"/>',
+  tag: '<path d="M4 4h7l9 9-7 7-9-9V4Z"/><circle cx="8.2" cy="8.2" r="1.3" fill="currentColor" stroke="none"/>',
+  bell: '<path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10Z"/><path d="M10 19a2 2 0 0 0 4 0"/>',
+  book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 1 4 17.5v-12Z"/><path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20"/>',
+  bookOpen: '<path d="M12 6.5c-1.6-1.3-4-2-7-2v13c3 0 5.4.7 7 2 1.6-1.3 4-2 7-2V4.5c-3 0-5.4.7-7 2Z"/><path d="M12 6.5v13"/>',
+  comment: '<path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4.5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/>',
+  crop: '<rect x="3.5" y="4.5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 15.5 15 10l-7.5 8"/>',
+  wrench: '<path d="M14.5 6.5a4 4 0 0 0-5.4 4.9L4 16.5V20h3.5l5-5.1a4 4 0 0 0 4.9-5.4l-2.6 2.6-2-2 2.7-2.6Z"/>',
+  logout: '<path d="M9 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H9"/><path d="M14 8l4 4-4 4"/><path d="M18 12H9"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="16" rx="2"/><path d="M3.5 10h17"/><path d="M8 3v4"/><path d="M16 3v4"/>',
+  trash: '<path d="M5 7h14"/><path d="M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"/><path d="M6.5 7l1 12.5a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1L17.5 7"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z"/>',
+  link: '<path d="M9.5 14.5l5-5"/><path d="M11 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/>'
+};
+function icon(name, size, filled){
+  const s = size || 17;
+  const body = ICONS[name] || "";
+  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;flex-shrink:0;">${body}</svg>`;
+}
+
 function avatarHtml(name, color, photo, sizeStyle){
   const style = sizeStyle || "width:28px;height:28px;font-size:12px;";
   if(photo){
@@ -2004,7 +2029,7 @@ function renderDayView(group, posts, dateStr){
       <button class="icon-btn" style="color:var(--pine)" id="cal-next-day" ${isFuture ? "disabled" : ""}>›</button>
     </div>
     ${dayPosts.length === 0 ? `
-      <div class="empty-state"><span class="big-emoji">📅</span>Aucun moment partagé ce jour-là.</div>
+      <div class="empty-state"><span class="big-emoji">${icon("calendar",40)}</span>Aucun moment partagé ce jour-là.</div>
     ` : `
       <div class="feed">
         ${dayPosts.map(p => `
@@ -2017,11 +2042,11 @@ function renderDayView(group, posts, dateStr){
             ${renderCarousel(p.photos, "carousel-day-" + p.id)}
             <div class="post-body">
               <p class="post-caption">${escapeHtml(p.caption)}</p>
-              ${p.location ? `<p class="location-line">📍 ${escapeHtml(p.location)}</p>` : ""}
-              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">🏷️ avec ${p.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
+              ${p.location ? `<p class="location-line">${icon("pin",13)} ${escapeHtml(p.location)}</p>` : ""}
+              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">${icon("tag",13)} avec ${p.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
               <div class="post-foot">
                 ${Object.entries(reactionCounts(p)).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
-                <span>💬 ${p.comments.length}</span>
+                <span>${icon("comment",14)} ${p.comments.length}</span>
                 ${p.favorite ? `<span>⭐ dans le livre</span>` : ""}
               </div>
             </div>
@@ -2529,7 +2554,7 @@ function renderEditProfileSheet(){
         <div id="edit-profile-error"></div>
         <div class="field" style="display:flex; align-items:center; gap:14px;">
           <div class="avatar-upload-zone" id="edit-avatar-zone">
-            ${photo ? `<img src="${photo}" alt=""/>` : `<span>📷</span>`}
+            ${photo ? `<img src="${photo}" alt=""/>` : `<span>${icon("camera",22)}</span>`}
           </div>
           <button class="btn-text" id="remove-avatar-btn" style="${photo ? '' : 'display:none;'}">Retirer la photo</button>
         </div>
@@ -2656,7 +2681,7 @@ function renderPostDetailSheet(){
     <div class="sheet-head">
       ${avatarHtml(post.authorName, post.authorAvatarColor, post.authorAvatarPhoto, "width:30px;height:30px;font-size:12px;")}
       <h4>${escapeHtml(post.authorName)} · ${formatDateShort(post.date)} · ${formatTime(post.createdAt)}</h4>
-      ${isAuthor ? `<button class="icon-btn" style="color:var(--ink)" id="edit-post-btn" title="Modifier">${postEditMode ? "✕" : "✏️"}</button>` : ""}
+      ${isAuthor ? `<button class="icon-btn" style="color:var(--ink)" id="edit-post-btn" title="Modifier">${postEditMode ? "✕" : icon("pencil",16)}</button>` : ""}
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
@@ -2670,15 +2695,15 @@ function renderPostDetailSheet(){
             <label>Légende</label>
             <input type="text" id="edit-caption-input" value="${escapeHtml(post.caption)}" />
           </div>
-          <button class="btn-secondary" id="change-photo-btn" style="margin-bottom:10px;">📷 Changer la photo</button>
-          <button class="btn-secondary" id="adjust-crop-btn" style="margin-bottom:10px;">🖼️ Ajuster le cadrage</button>
+          <button class="btn-secondary" id="change-photo-btn" style="margin-bottom:10px;">${icon("camera",15)} Changer la photo</button>
+          <button class="btn-secondary" id="adjust-crop-btn" style="margin-bottom:10px;">${icon("crop",15)} Ajuster le cadrage</button>
           <button class="btn-primary" id="save-post-edit-btn" style="margin-bottom:10px;">Enregistrer</button>
-          <button class="btn-text" id="delete-post-btn" style="color:var(--danger);">🗑️ Supprimer cette photo</button>
+          <button class="btn-text" id="delete-post-btn" style="color:var(--danger);">${icon("trash",15)} Supprimer cette photo</button>
         </div>
       ` : `
         <div class="modal-caption">${escapeHtml(post.caption)}</div>
-        ${post.location ? `<p class="location-line" style="padding:0 18px 6px;">📍 ${escapeHtml(post.location)}</p>` : ""}
-        ${post.taggedUsers && post.taggedUsers.length ? `<p class="location-line" style="padding:0 18px 10px;">🏷️ avec ${post.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
+        ${post.location ? `<p class="location-line" style="padding:0 18px 6px;">${icon("pin",13)} ${escapeHtml(post.location)}</p>` : ""}
+        ${post.taggedUsers && post.taggedUsers.length ? `<p class="location-line" style="padding:0 18px 10px;">${icon("tag",13)} avec ${post.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
       `}
       <div class="modal-reactions">
         ${REACTION_SET.map(e => {
@@ -2686,7 +2711,7 @@ function renderPostDetailSheet(){
           const mine = (post.reactionsByUser || {})[currentUser.id] === e;
           return `<button class="react-btn ${mine ? 'active-reaction':''}" data-emoji="${e}">${e} ${counts[e] || ""}</button>`;
         }).join("")}
-        <button class="react-btn" id="fav-toggle">${post.favorite ? "⭐ Dans le livre" : "☆ Ajouter au livre"}</button>
+        <button class="react-btn" id="fav-toggle">${post.favorite ? icon("star",14,true) + " Dans le livre" : icon("star",14,false) + " Ajouter au livre"}</button>
       </div>
       <div class="modal-comments" id="modal-comments">
         ${post.comments.map(c => {
@@ -2702,7 +2727,7 @@ function renderPostDetailSheet(){
           return `
             <div class="comment">
               <span class="cname">${escapeHtml(c.author)}</span>${escapeHtml(c.text)}
-              ${mine ? `<button class="edit-comment-btn" data-comment="${c.id}" title="Modifier">✏️</button>` : ""}
+              ${mine ? `<button class="edit-comment-btn" data-comment="${c.id}" title="Modifier">${icon("pencil",13)}</button>` : ""}
             </div>
           `;
         }).join("") || `<div class="comment" style="color:var(--ink-soft)">Aucun commentaire pour l'instant.</div>`}
@@ -2930,12 +2955,12 @@ function renderAddPostSheet(){
         ${newPostPhotos.map((p, i) => `
           <div class="photo-thumb" data-adjust-index="${i}" style="cursor:pointer;">
             <img src="${p.url}" style="object-position:${p.focusX}% ${p.focusY}%" alt=""/>
-            <span class="photo-thumb-crop-hint">🖼️</span>
+            <span class="photo-thumb-crop-hint">${icon("crop",11)}</span>
             <button class="photo-thumb-remove" data-index="${i}">✕</button>
           </div>
         `).join("")}
         <div class="photo-thumb-add" id="add-photo-zone">
-          <span>📷</span><span style="font-size:10.5px;">${newPostPhotos.length ? "Ajouter" : "Choisir"}</span>
+          <span>${icon("camera",20)}</span><span style="font-size:10.5px;">${newPostPhotos.length ? "Ajouter" : "Choisir"}</span>
         </div>
       </div>
       ${newPostPhotos.length ? `<p class="helper-text" style="margin:0 18px 6px;">Appuie sur une photo pour ajuster son cadrage.</p>` : ""}
@@ -2948,7 +2973,7 @@ function renderAddPostSheet(){
           <label>Lieu (facultatif)</label>
           <div style="display:flex; gap:8px;">
             <input type="text" id="post-location" placeholder="ex. Annecy, France" value="${escapeHtml(newPostLocation)}" style="flex:1;" />
-            <button class="icon-btn" style="background:var(--paper-dim); color:var(--pine); border-radius:10px; width:44px;" id="use-location-btn" title="Utiliser ma position">📍</button>
+            <button class="icon-btn" style="background:var(--paper-dim); color:var(--pine); border-radius:10px; width:44px;" id="use-location-btn" title="Utiliser ma position">${icon("pin",16)}</button>
           </div>
         </div>
         ${members.length ? `
@@ -3008,9 +3033,9 @@ function bindAddPostSheet(){
         const place = [data.city || data.locality, data.countryName].filter(Boolean).join(", ");
         newPostLocation = place || `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
       }catch(e){ showToast("Impossible de récupérer le lieu."); }
-      btn.textContent = "📍";
+      btn.innerHTML = icon("pin",16);
       renderOverlay();
-    }, ()=>{ btn.textContent = "📍"; showToast("Localisation refusée ou indisponible."); }, { timeout: 8000 });
+    }, ()=>{ btn.innerHTML = icon("pin",16); showToast("Localisation refusée ou indisponible."); }, { timeout: 8000 });
   });
   document.querySelectorAll(".tag-person-checkbox").forEach(cb=>{
     cb.addEventListener("change", ()=>{
@@ -3070,7 +3095,7 @@ function renderInviteSheet(){
     <div class="sheet-body">
       <p style="padding:16px 18px 0; font-size:13.5px; color:var(--ink-soft); line-height:1.5;">Le plus simple : envoie le lien ci-dessous par SMS ou WhatsApp. Tes amis appuient dessus, créent leur compte, et rejoignent le groupe automatiquement — sans rien taper.</p>
       <div class="form-block" style="padding-top:16px;">
-        <button class="btn-primary" id="share-link">🔗 Partager le lien d'invitation</button>
+        <button class="btn-primary" id="share-link">${icon("link",15)} Partager le lien d'invitation</button>
         <p class="section-label" style="margin-top:22px;">Ou avec le code</p>
         <div class="invite-code" style="margin:0; padding:16px;">${group.joinCode}</div>
         <button class="btn-secondary" id="copy-code" style="margin-top:10px;">Copier juste le code</button>

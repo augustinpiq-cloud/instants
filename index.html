@@ -173,7 +173,7 @@
     all:unset; flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
     padding:6px 0; cursor:pointer; color:var(--ink-soft); font-size:10.5px; font-weight:500;
   }
-  .nav-btn .ic{ font-size:19px; }
+  .nav-btn .ic{ width:22px; height:22px; }
   .nav-btn.active{ color:var(--gold); }
 
   /* ---------- Group screen ---------- */
@@ -1469,7 +1469,6 @@ function renderHomeScreen(){
             Tu n'as pas encore de carnet.<br/>Crée un groupe ou rejoins celui de tes amis avec leur code.
           </div>
         ` : `
-          <p class="section-label">Tes groupes</p>
           ${groups.map(g => {
             const posts = postsCache[g.id] || [];
             const last = [...posts].sort((a,b)=> b.date.localeCompare(a.date))[0];
@@ -1488,7 +1487,7 @@ function renderHomeScreen(){
           }).join("")}
         `}
         <div class="home-actions">
-          <button class="btn-primary" id="go-create-group">➕ Créer un groupe</button>
+          <button class="btn-primary" id="go-create-group">+ Créer un groupe</button>
           <button class="btn-secondary" id="go-join-group">🔑 Rejoindre avec un code</button>
         </div>
       </div>
@@ -1517,10 +1516,12 @@ function bindHome(){
 
 /* ===================== Bottom nav ===================== */
 function renderBottomNav(active){
+  const homeIcon = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H10v-6h4v6h3.5a1 1 0 0 0 1-1v-9"/></svg>`;
+  const profileIcon = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 19.5a7.2 7.2 0 0 1 14.4 0"/></svg>`;
   return `
     <div class="bottom-nav">
-      <button class="nav-btn ${active==='home'?'active':''}" data-nav="home"><span class="ic">🏠</span>Carnets</button>
-      <button class="nav-btn ${active==='profile'?'active':''}" data-nav="profile"><span class="ic">👤</span>Profil</button>
+      <button class="nav-btn ${active==='home'?'active':''}" data-nav="home">${homeIcon}Carnets</button>
+      <button class="nav-btn ${active==='profile'?'active':''}" data-nav="profile">${profileIcon}Profil</button>
     </div>
   `;
 }

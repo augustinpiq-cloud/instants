@@ -577,12 +577,12 @@ async function getPushSubscription(){
 }
 async function enablePushNotifications(){
   if(!pushSupported()){
-    showToast("Les notifications ne sont pas prises en charge sur cet appareil/navigateur.");
+    showToast(t("Les notifications ne sont pas prises en charge sur cet appareil/navigateur."));
     return false;
   }
   const permission = await Notification.requestPermission();
   if(permission !== "granted"){
-    showToast("Notifications refusées — tu peux les autoriser dans les réglages du téléphone.");
+    showToast(t("Notifications refusées — tu peux les autoriser dans les réglages du téléphone."));
     return false;
   }
   try{
@@ -598,12 +598,12 @@ async function enablePushNotifications(){
     const { error } = await sb.from("push_subscriptions").upsert({
       user_id: currentUser.id, endpoint: raw.endpoint, p256dh: raw.keys.p256dh, auth: raw.keys.auth
     }, { onConflict: "endpoint" });
-    if(error){ console.error("push subscribe error", error); showToast("⚠️ Impossible d'activer les notifications pour l'instant."); return false; }
-    showToast("Notifications activées 🔔");
+    if(error){ console.error("push subscribe error", error); showToast(t("⚠️ Impossible d'activer les notifications pour l'instant.")); return false; }
+    showToast(t("Notifications activées 🔔"));
     return true;
   }catch(e){
     console.error("push subscribe error", e);
-    showToast("⚠️ Impossible d'activer les notifications pour l'instant.");
+    showToast(t("⚠️ Impossible d'activer les notifications pour l'instant."));
     return false;
   }
 }
@@ -614,7 +614,7 @@ async function disablePushNotifications(){
       await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
       await sub.unsubscribe();
     }
-    showToast("Notifications désactivées");
+    showToast(t("Notifications désactivées"));
   }catch(e){ console.error("push unsubscribe error", e); }
 }
 
@@ -665,6 +665,207 @@ let editProfilePhoto = undefined; // undefined = unchanged, null = removed, data
 const PALETTE = ["#4C7A6C","#A66B63","#C9A24C","#5C6FA6","#8A7CA8","#7A9E6E","#B08968"];
 const REACTION_SET = ["❤️","👏","😂","🔥"];
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DOW_FR = ["L","M","M","J","V","S","D"];
+const DOW_EN = ["M","T","W","T","F","S","S"];
+
+/* ===================== i18n (French / English) ===================== */
+// "A Wyle" is the app name and is never translated. currentLang is "fr" (default)
+// or "en". It's chosen at signup and can be changed anytime from the Profile
+// screen; it's persisted to profiles.lang so it follows the user across devices.
+// signupLang is used only on the auth screen, before an account exists.
+let currentLang = "fr";
+let signupLang = "fr";
+function lang(){ return currentUser ? currentLang : signupLang; }
+function months(){ return lang() === "en" ? MONTHS_EN : MONTHS_FR; }
+function dow(){ return lang() === "en" ? DOW_EN : DOW_FR; }
+function dateLocale(){ return lang() === "en" ? "en-GB" : "fr-FR"; }
+
+const I18N_EN = {
+  "Nos instants de vie": "Our life's moments",
+  "Le carnet du groupe": "The group's photo book",
+  "Choisis un nouveau mot de passe": "Choose a new password",
+  "Se connecter": "Log in",
+  "Créer un compte": "Create account",
+  "Email": "Email",
+  "Mot de passe": "Password",
+  "8 caractères min., 1 majuscule, 1 caractère spécial": "8 chars min., 1 uppercase letter, 1 special character",
+  "Connexion…": "Logging in…",
+  "Mot de passe oublié ?": "Forgot password?",
+  "Ton prénom": "Your first name",
+  "Mot de passe oublié": "Forgot password",
+  "Entre ton email, on t'envoie un lien pour choisir un nouveau mot de passe.": "Enter your email and we'll send you a link to choose a new password.",
+  "Envoyer le lien": "Send the link",
+  "← Retour à la connexion": "← Back to login",
+  "Nouveau mot de passe": "New password",
+  "Confirme le mot de passe": "Confirm password",
+  "Enregistrer le nouveau mot de passe": "Save new password",
+  "Enregistrement…": "Saving…",
+  "Ta couleur": "Your color",
+  "Photo de profil (facultatif)": "Profile photo (optional)",
+  "Ajouter": "Add",
+  "Créer mon compte": "Create my account",
+  "Création…": "Creating…",
+  "Un email de confirmation te sera envoyé — clique sur le lien avant de te connecter.": "A confirmation email will be sent — click the link before logging in.",
+  "Langue": "Language",
+  "Français": "French",
+  "Anglais": "English",
+  "Mes carnets": "My books",
+  "Tu n'as pas encore de carnet.": "You don't have a book yet.",
+  "Crée un groupe ou rejoins celui de tes amis avec leur code.": "Create a group or join your friends' with their code.",
+  "+ Créer un groupe": "+ Create a group",
+  "Rejoindre avec un code": "Join with a code",
+  "Carnets": "Books",
+  "Profil": "Profile",
+  "Mon profil": "My profile",
+  "Modifier mon profil": "Edit my profile",
+  "Notifications": "Notifications",
+  "Notifications (non supportées ici)": "Notifications (not supported here)",
+  "Activer les notifications": "Enable notifications",
+  "Notifications activées ✅ (toucher pour désactiver)": "Notifications on ✅ (tap to turn off)",
+  "Corriger mes anciennes publications": "Fix my old posts",
+  "Correction en cours…": "Fixing…",
+  "Anciennes publications corrigées ✅": "Old posts fixed ✅",
+  "Comment installer l'appli ?": "How do I install the app?",
+  "Se déconnecter": "Log out",
+  "Mes photos": "My photos",
+  "Tu n'as encore rien publié.": "You haven't posted anything yet.",
+  "Aucune réaction": "No reactions",
+  "Nouveau groupe": "New group",
+  "Créer un carnet": "Create a book",
+  "Donne un nom à ton groupe. Tu recevras un code à partager avec tes amis pour qu'ils te rejoignent.": "Give your group a name. You'll get a code to share with your friends so they can join.",
+  "Nom du groupe": "Group name",
+  "Sous-titre (optionnel)": "Subtitle (optional)",
+  "Créer le groupe": "Create the group",
+  "Donne un nom à ton groupe.": "Give your group a name.",
+  "Rejoindre un groupe": "Join a group",
+  "Entre le code": "Enter the code",
+  "Demande le code d'invitation à 6 caractères à la personne qui a créé le groupe.": "Ask the person who created the group for the 6-character invite code.",
+  "Code d'invitation": "Invite code",
+  "Rejoindre": "Join",
+  "Entre un code.": "Enter a code.",
+  "Ce code ne correspond à aucun groupe.": "This code doesn't match any group.",
+  "Inviter": "Invite",
+  "Livre de l'année": "Yearbook",
+  "Fil": "Feed",
+  "Calendrier": "Calendar",
+  "Aucune photo pour l'instant.": "No photos yet.",
+  "Appuie sur + pour partager le premier moment.": "Tap + to share the first moment.",
+  "dans le livre": "in the book",
+  "Dans le livre": "In the book",
+  "Ajouter au livre": "Add to the book",
+  "avec": "with",
+  "Aujourd'hui": "Today",
+  "appuie sur un jour pour voir ses moments": "tap a day to see its moments",
+  "← Calendrier": "← Calendar",
+  "Aucun moment partagé ce jour-là.": "No moments shared that day.",
+  "Le livre de": "The book of",
+  "Marquez vos photos préférées avec ⭐ tout au long de l'année : elles atterrissent ici, prêtes pour le livre imprimé envoyé à chaque membre en fin d'année.": "Mark your favorite photos with ⭐ throughout the year: they land here, ready for the printed book sent to every member at year's end.",
+  "Aucune photo sélectionnée pour l'instant.": "No photos selected yet.",
+  "Ouvre une photo dans le fil pour la marquer.": "Open a photo in the feed to mark it.",
+  "Commander le livre": "Order the book",
+  "Fil actualisé": "Feed refreshed",
+  "Commande envoyée — le livre sera imprimé et posté à chaque membre 📖": "Order sent — the book will be printed and mailed to every member 📖",
+  "Le lien d'invitation n'est plus valide.": "This invite link is no longer valid.",
+  "Ajuster le cadrage": "Adjust the framing",
+  "Aperçu dans le fil": "Preview in the feed",
+  "Appuie sur la photo pour choisir ce qui doit rester visible": "Tap the photo to choose what stays visible",
+  "Valider ce cadrage": "Confirm this framing",
+  "Enregistrer ce cadrage": "Save this framing",
+  "Cadrage mis à jour ✅": "Framing updated ✅",
+  "Retirer la photo": "Remove photo",
+  "Prénom": "First name",
+  "Couleur": "Color",
+  "Changer l'email envoie un lien de confirmation à la nouvelle adresse.": "Changing your email sends a confirmation link to the new address.",
+  "Nouveau mot de passe (laisser vide pour ne pas changer)": "New password (leave blank to keep the same)",
+  "Enregistrer": "Save",
+  "Impossible de mettre à jour l'email/mot de passe pour l'instant.": "Can't update the email/password right now.",
+  "Vérifie ta nouvelle boîte mail pour confirmer le changement d'adresse 📬": "Check your new inbox to confirm the address change 📬",
+  "Profil mis à jour partout ✅": "Profile updated everywhere ✅",
+  "Installer A Wyle": "Install A Wyle",
+  "Sur iPhone (Safari)": "On iPhone (Safari)",
+  "Sur Android (Chrome)": "On Android (Chrome)",
+  "Modifier": "Edit",
+  "Légende": "Caption",
+  "Changer la photo": "Change photo",
+  "Ajuster le cadrage ": "Adjust the framing ",
+  "Supprimer cette photo": "Delete this photo",
+  "Aucun commentaire pour l'instant.": "No comments yet.",
+  "Écrire un commentaire… (@ pour mentionner)": "Write a comment… (@ to mention)",
+  "Envoyer": "Send",
+  "Supprimer définitivement cette photo, avec ses commentaires et réactions ?": "Permanently delete this photo, along with its comments and reactions?",
+  "Photo supprimée": "Photo deleted",
+  "inconnue": "unknown",
+  "Photo mise à jour ✅": "Photo updated ✅",
+  "Nouvelle photo prête — clique \"Enregistrer\" pour valider": "New photo ready — click \"Save\" to confirm",
+  "Photo ajoutée en réponse 📸": "Photo added as a reply 📸",
+  "Nouveau moment": "New moment",
+  "Raconte ce moment…": "Tell the story of this moment…",
+  "Lieu (facultatif)": "Location (optional)",
+  "ex. Annecy, France": "e.g. Paris, France",
+  "Taguer des personnes (facultatif)": "Tag people (optional)",
+  "Ajouter à la sélection du livre de l'année": "Add to the yearbook selection",
+  "Publier": "Post",
+  "Publication…": "Posting…",
+  "Photo publiée 🎉": "Photo posted 🎉",
+  "Choisir": "Choose",
+  "Appuie sur une photo pour ajuster son cadrage.": "Tap a photo to adjust its framing.",
+  "Utiliser ma position": "Use my location",
+  "Localisation non disponible sur cet appareil.": "Location isn't available on this device.",
+  "Impossible de récupérer le lieu.": "Couldn't retrieve the location.",
+  "Localisation refusée ou indisponible.": "Location denied or unavailable.",
+  "Inviter dans": "Invite to",
+  "Le plus simple : envoie le lien ci-dessous par SMS ou WhatsApp. Tes amis appuient dessus, créent leur compte, et rejoignent le groupe automatiquement — sans rien taper.": "The easiest way: send the link below by text or WhatsApp. Your friends tap it, create their account, and join the group automatically — no typing needed.",
+  "Partager le lien d'invitation": "Share invite link",
+  "Ou avec le code": "Or with the code",
+  "Copier juste le code": "Just copy the code",
+  "Lien copié !": "Link copied!",
+  "Code copié !": "Code copied!",
+  "Rejoins": "Join",
+  "sur A Wyle": "on A Wyle",
+  "Installer": "Install",
+  "Comment faire": "How to",
+  "Installe A Wyle comme une appli sur ton téléphone.": "Install A Wyle as an app on your phone.",
+  "Installe A Wyle sur ton écran d'accueil pour l'ouvrir comme une vraie appli.": "Install A Wyle on your home screen to open it like a real app.",
+  "Tu as été invité·e à rejoindre un groupe — connecte-toi ou crée un compte pour y accéder directement.": "You've been invited to join a group — log in or create an account to access it right away.",
+  "Bienvenue dans": "Welcome to",
+  "le groupe": "the group",
+  "Entre ton email et ton mot de passe.": "Enter your email and password.",
+  "Email ou mot de passe incorrect, ou compte non confirmé.": "Incorrect email or password, or unconfirmed account.",
+  "Entre un email valide.": "Enter a valid email.",
+  "Entre ton prénom.": "Enter your first name.",
+  "Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial.": "Password must be at least 8 characters, with an uppercase letter and a special character.",
+  "Les deux mots de passe ne correspondent pas.": "The two passwords don't match.",
+  "Impossible de changer le mot de passe pour l'instant.": "Can't change the password right now.",
+  "Mot de passe mis à jour ✅": "Password updated ✅",
+  "Compte créé — vérifie ta boîte mail pour confirmer, puis connecte-toi 📬": "Account created — check your inbox to confirm, then log in 📬",
+  "Email envoyé — vérifie ta boîte de réception 📬": "Email sent — check your inbox 📬",
+  "Les notifications ne sont pas prises en charge sur cet appareil/navigateur.": "Notifications aren't supported on this device/browser.",
+  "Notifications refusées — tu peux les autoriser dans les réglages du téléphone.": "Notifications declined — you can allow them in your phone's settings.",
+  "⚠️ Impossible d'activer les notifications pour l'instant.": "⚠️ Can't turn on notifications right now.",
+  "Notifications activées 🔔": "Notifications turned on 🔔",
+  "Notifications désactivées": "Notifications turned off",
+  "⚠️ Publication impossible pour l'instant.": "⚠️ Couldn't post right now.",
+  "⚠️ Action impossible pour l'instant.": "⚠️ Couldn't complete that right now.",
+  "⚠️ Modification impossible pour l'instant.": "⚠️ Couldn't save the change right now.",
+  "⚠️ Suppression impossible pour l'instant.": "⚠️ Couldn't delete right now.",
+  "⚠️ Cette photo ne peut pas encore être recadrée — republie-la pour activer le cadrage.": "⚠️ This photo can't be reframed yet — repost it to enable framing.",
+  "⚠️ Cadrage impossible pour l'instant.": "⚠️ Couldn't save the framing right now.",
+  "⚠️ Commentaire impossible pour l'instant.": "⚠️ Couldn't post the comment right now.",
+  "⚠️ Réponse impossible pour l'instant.": "⚠️ Couldn't post the reply right now."
+};
+function t(s){
+  if(lang() !== "en") return s;
+  return Object.prototype.hasOwnProperty.call(I18N_EN, s) ? I18N_EN[s] : s;
+}
+// Small pluralization helpers for the dynamic count strings used across the app.
+function nMembers(n){ return lang()==="en" ? `${n} member${n>1?"s":""}` : `${n} membre${n>1?"s":""}`; }
+function nMoments(n){ return lang()==="en" ? `${n} moment${n>1?"s":""}` : `${n} moment${n>1?"s":""}`; }
+function nNewMoments(n){ return lang()==="en" ? `${n} new moment${n>1?"s":""}` : `${n} nouveau${n>1?"x":""} moment${n>1?"s":""}`; }
+function nGroups(n){ return lang()==="en" ? `${n} group${n>1?"s":""}` : `${n} groupe${n>1?"s":""}`; }
+function nReactions(n){ return lang()==="en" ? `${n} reaction${n>1?"s":""}` : `${n} réaction${n>1?"s":""}`; }
+function nPhotos(n){ return lang()==="en" ? `${n} photo${n>1?"s":""}` : `${n} photo${n>1?"s":""}`; }
+function nSelectedPhotos(n){ return lang()==="en" ? `${n} photo${n>1?"s":""} selected` : `${n} photo${n>1?"s":""} sélectionnée${n>1?"s":""}`; }
 
 function uid(prefix){ return prefix + "-" + Math.random().toString(36).slice(2,9); }
 function genCode(){
@@ -675,15 +876,15 @@ function genCode(){
 }
 function formatDateFR(dateStr){
   const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" });
+  return d.toLocaleDateString(dateLocale(), { day:"numeric", month:"long", year:"numeric" });
 }
 function formatDateShort(dateStr){
   const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("fr-FR", { day:"numeric", month:"short" });
+  return d.toLocaleDateString(dateLocale(), { day:"numeric", month:"short" });
 }
 function formatTime(isoTimestamp){
   if(!isoTimestamp) return "";
-  return new Date(isoTimestamp).toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
+  return new Date(isoTimestamp).toLocaleTimeString(dateLocale(), { hour:"2-digit", minute:"2-digit" });
 }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 
@@ -760,7 +961,7 @@ async function fetchProfile(userId){
   try{
     const { data, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
     if(error || !data) return null;
-    return { id: userId, displayName: data.display_name, avatarColor: data.avatar_color, avatarPhoto: data.avatar_photo };
+    return { id: userId, displayName: data.display_name, avatarColor: data.avatar_color, avatarPhoto: data.avatar_photo, lang: data.lang };
   }catch(e){ console.error("fetchProfile error", e); return null; }
 }
 async function upsertProfile(userId, fields){
@@ -769,6 +970,7 @@ async function upsertProfile(userId, fields){
     if(fields.displayName !== undefined) row.display_name = fields.displayName;
     if(fields.avatarColor !== undefined) row.avatar_color = fields.avatarColor;
     if(fields.avatarPhoto !== undefined) row.avatar_photo = fields.avatarPhoto;
+    if(fields.lang !== undefined) row.lang = fields.lang;
     const { error } = await sb.from("profiles").upsert(row);
     if(error){ console.error("upsertProfile error", error); return false; }
     return true;
@@ -798,15 +1000,17 @@ async function buildCurrentUser(authUser){
   let displayName = (profile && profile.displayName) || meta.display_name;
   let avatarColor = (profile && profile.avatarColor) || meta.avatar_color || PALETTE[0];
   let avatarPhoto = (profile && profile.avatarPhoto) || meta.avatar_photo || null;
+  let userLang = (profile && profile.lang) || meta.lang || "fr";
   const brokenName = !displayName || displayName === authUser.email;
   if(brokenName){ displayName = authUser.email.split("@")[0]; }
-  if(!profile || brokenName){
-    await upsertProfile(authUser.id, { displayName, avatarColor, avatarPhoto });
+  if(!profile || brokenName || (profile && !profile.lang)){
+    await upsertProfile(authUser.id, { displayName, avatarColor, avatarPhoto, lang: userLang });
   }
   if(brokenName){
     await syncAuthorInfoEverywhere(authUser.id, displayName, avatarColor, avatarPhoto);
   }
-  return { id: authUser.id, email: authUser.email, displayName, avatarColor, avatarPhoto };
+  currentLang = userLang;
+  return { id: authUser.id, email: authUser.email, displayName, avatarColor, avatarPhoto, lang: userLang };
 }
 
 // Groups the current user belongs to — the database itself only returns rows
@@ -952,7 +1156,7 @@ async function insertPost(groupId, post){
     post_date: post.date, caption: post.caption, photo: uploaded[0].value, favorite: post.favorite,
     location: post.location || null
   });
-  if(error){ console.error("insertPost error", error); showToast("⚠️ Publication impossible pour l'instant."); return false; }
+  if(error){ console.error("insertPost error", error); showToast(t("⚠️ Publication impossible pour l'instant.")); return false; }
   if(uploaded.length){
     const rows = uploaded.map((p, i) => ({ post_id: postId, photo: p.value, position: i, focus_x: p.focusX, focus_y: p.focusY }));
     const { error: photosErr } = await sb.from("post_photos").insert(rows);
@@ -967,14 +1171,14 @@ async function insertPost(groupId, post){
 }
 async function setPostFavorite(postId, value){
   const { error } = await sb.from("posts").update({ favorite: value }).eq("id", postId);
-  if(error){ console.error("setPostFavorite error", error); showToast("⚠️ Action impossible pour l'instant."); return false; }
+  if(error){ console.error("setPostFavorite error", error); showToast(t("⚠️ Action impossible pour l'instant.")); return false; }
   return true;
 }
 async function editPost(postId, fields){
   const row = {};
   if(fields.caption !== undefined) row.caption = fields.caption;
   const { error } = await sb.from("posts").update(row).eq("id", postId);
-  if(error){ console.error("editPost error", error); showToast("⚠️ Modification impossible pour l'instant."); return false; }
+  if(error){ console.error("editPost error", error); showToast(t("⚠️ Modification impossible pour l'instant.")); return false; }
   return true;
 }
 async function replacePostPhoto(postId, groupId, photoRowId, dataUrl){
@@ -993,13 +1197,13 @@ async function replacePostPhoto(postId, groupId, photoRowId, dataUrl){
 }
 async function deletePost(postId){
   const { error } = await sb.from("posts").delete().eq("id", postId);
-  if(error){ console.error("deletePost error", error); showToast("⚠️ Suppression impossible pour l'instant."); return false; }
+  if(error){ console.error("deletePost error", error); showToast(t("⚠️ Suppression impossible pour l'instant.")); return false; }
   return true;
 }
 async function setPhotoFocus(photoId, focusX, focusY){
-  if(!photoId){ showToast("⚠️ Cette photo ne peut pas encore être recadrée — republie-la pour activer le cadrage."); return false; }
+  if(!photoId){ showToast(t("⚠️ Cette photo ne peut pas encore être recadrée — republie-la pour activer le cadrage.")); return false; }
   const { error } = await sb.from("post_photos").update({ focus_x: focusX, focus_y: focusY }).eq("id", photoId);
-  if(error){ console.error("setPhotoFocus error", error); showToast("⚠️ Cadrage impossible pour l'instant."); return false; }
+  if(error){ console.error("setPhotoFocus error", error); showToast(t("⚠️ Cadrage impossible pour l'instant.")); return false; }
   return true;
 }
 async function setReaction(postId, emoji){
@@ -1011,21 +1215,21 @@ async function setReaction(postId, emoji){
       await sb.from("reactions").upsert({ post_id: postId, user_id: currentUser.id, emoji });
     }
     return true;
-  }catch(e){ console.error("setReaction error", e); showToast("⚠️ Action impossible pour l'instant."); return false; }
+  }catch(e){ console.error("setReaction error", e); showToast(t("⚠️ Action impossible pour l'instant.")); return false; }
 }
 async function insertComment(postId, text){
   const { error } = await sb.from("comments").insert({ post_id: postId, author_id: currentUser.id, author_name: currentUser.displayName, text });
-  if(error){ console.error("insertComment error", error); showToast("⚠️ Commentaire impossible pour l'instant."); return false; }
+  if(error){ console.error("insertComment error", error); showToast(t("⚠️ Commentaire impossible pour l'instant.")); return false; }
   return true;
 }
 async function editComment(commentId, text){
   const { error } = await sb.from("comments").update({ text }).eq("id", commentId);
-  if(error){ console.error("editComment error", error); showToast("⚠️ Modification impossible pour l'instant."); return false; }
+  if(error){ console.error("editComment error", error); showToast(t("⚠️ Modification impossible pour l'instant.")); return false; }
   return true;
 }
 async function insertReply(postId, img){
   const { error } = await sb.from("replies").insert({ post_id: postId, author_id: currentUser.id, author_name: currentUser.displayName, img });
-  if(error){ console.error("insertReply error", error); showToast("⚠️ Réponse impossible pour l'instant."); return false; }
+  if(error){ console.error("insertReply error", error); showToast(t("⚠️ Réponse impossible pour l'instant.")); return false; }
   return true;
 }
 
@@ -1105,8 +1309,8 @@ function renderInstallBanner(){
     return `
       <div class="install-banner">
         <span class="ib-icon">${icon("smartphone",16)}</span>
-        <span class="ib-text">Installe A Wyle comme une appli sur ton téléphone.</span>
-        <button class="ib-action" id="install-action">Installer</button>
+        <span class="ib-text">${t("Installe A Wyle comme une appli sur ton téléphone.")}</span>
+        <button class="ib-action" id="install-action">${t("Installer")}</button>
         <button class="ib-dismiss" id="install-dismiss">✕</button>
       </div>
     `;
@@ -1115,8 +1319,8 @@ function renderInstallBanner(){
     return `
       <div class="install-banner">
         <span class="ib-icon">${icon("smartphone",16)}</span>
-        <span class="ib-text">Installe A Wyle sur ton écran d'accueil pour l'ouvrir comme une vraie appli.</span>
-        <button class="ib-action" id="install-help-open">Comment faire</button>
+        <span class="ib-text">${t("Installe A Wyle sur ton écran d'accueil pour l'ouvrir comme une vraie appli.")}</span>
+        <button class="ib-action" id="install-help-open">${t("Comment faire")}</button>
         <button class="ib-dismiss" id="install-dismiss">✕</button>
       </div>
     `;
@@ -1176,8 +1380,9 @@ async function tryPendingJoin(){
   const code = pendingJoinCode;
   pendingJoinCode = null;
   const groupId = await joinGroupByCodeInDb(code);
-  if(!groupId){ showToast("Le lien d'invitation n'est plus valide."); screen = "home"; render(); return; }
+  if(!groupId){ showToast(t("Le lien d'invitation n'est plus valide.")); screen = "home"; render(); return; }
   await loadGroupsList();
+  const g = getGroup(groupId);
   activeGroupId = groupId;
   activeView = "fil";
   screen = "group";
@@ -1185,7 +1390,7 @@ async function tryPendingJoin(){
   if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
   await markGroupSeen(activeGroupId);
   updateAppBadge();
-  showToast(`Bienvenue dans ${g.name} 🎉`);
+  showToast(`${t("Bienvenue dans")} ${g ? g.name : t("le groupe")} 🎉`);
 }
 
 function render(){
@@ -1207,7 +1412,7 @@ function renderLoading(){
       <div class="brand-block">
         <span class="brand-mark"></span>
         <h1 class="brand-title">A Wyle</h1>
-        <span class="brand-sub">Nos instants de vie</span>
+        <span class="brand-sub">${t("Nos instants de vie")}</span>
       </div>
       <div class="spinner"></div>
     </div>
@@ -1215,6 +1420,14 @@ function renderLoading(){
 }
 
 /* ===================== Auth ===================== */
+function renderLangToggle(idPrefix){
+  return `
+    <div class="auth-tabs" style="margin-bottom:14px;" id="${idPrefix}-lang-toggle">
+      <button type="button" class="auth-tab ${signupLang==='fr'?'active':''}" data-lang="fr">Français</button>
+      <button type="button" class="auth-tab ${signupLang==='en'?'active':''}" data-lang="en">English</button>
+    </div>
+  `;
+}
 function renderAuth(){
   if(authMode === "forgotPassword") return renderForgotPasswordScreen();
   return `
@@ -1224,15 +1437,16 @@ function renderAuth(){
         <div class="brand-block" style="margin-bottom:22px;">
           <span class="brand-mark"></span>
           <h1 class="brand-title">A Wyle</h1>
-          <span class="brand-sub">Le carnet du groupe</span>
+          <span class="brand-sub">${t("Le carnet du groupe")}</span>
         </div>
         <div class="auth-card">
+          ${renderLangToggle("auth")}
           <div class="auth-tabs">
-            <button class="auth-tab ${authMode==='login'?'active':''}" data-mode="login">Se connecter</button>
-            <button class="auth-tab ${authMode==='signup'?'active':''}" data-mode="signup">Créer un compte</button>
+            <button class="auth-tab ${authMode==='login'?'active':''}" data-mode="login">${t("Se connecter")}</button>
+            <button class="auth-tab ${authMode==='signup'?'active':''}" data-mode="signup">${t("Créer un compte")}</button>
           </div>
           ${authMode === "login" ? renderLoginForm() : renderSignupForm()}
-          ${pendingJoinCode ? `<p class="helper-text" style="color:var(--teal);">${icon("key",14)} Tu as été invité·e à rejoindre un groupe — connecte-toi ou crée un compte pour y accéder directement.</p>` : ""}
+          ${pendingJoinCode ? `<p class="helper-text" style="color:var(--teal);">${icon("key",14)} ${t("Tu as été invité·e à rejoindre un groupe — connecte-toi ou crée un compte pour y accéder directement.")}</p>` : ""}
         </div>
       </div>
     </div>
@@ -1242,50 +1456,50 @@ function renderLoginForm(){
   return `
     <div id="auth-error"></div>
     <div class="field">
-      <label>Email</label>
+      <label>${t("Email")}</label>
       <input type="email" id="login-email" placeholder="toi@exemple.com" autocomplete="username" />
     </div>
     <div class="field">
-      <label>Mot de passe</label>
+      <label>${t("Mot de passe")}</label>
       <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
     </div>
-    <button class="btn-primary" id="login-submit">Se connecter</button>
-    <button class="btn-text" id="forgot-password-link" style="margin-top:14px;">Mot de passe oublié ?</button>
+    <button class="btn-primary" id="login-submit">${t("Se connecter")}</button>
+    <button class="btn-text" id="forgot-password-link" style="margin-top:14px;">${t("Mot de passe oublié ?")}</button>
   `;
 }
 function renderSignupForm(){
   return `
     <div id="auth-error"></div>
     <div class="field">
-      <label>Ton prénom</label>
+      <label>${t("Ton prénom")}</label>
       <input type="text" id="signup-name" placeholder="ex. Sarah" autocomplete="off" />
     </div>
     <div class="field">
-      <label>Email</label>
+      <label>${t("Email")}</label>
       <input type="email" id="signup-email" placeholder="toi@exemple.com" autocomplete="username" />
     </div>
     <div class="field">
-      <label>Mot de passe</label>
-      <input type="password" id="signup-password" placeholder="8 caractères min., 1 majuscule, 1 caractère spécial" autocomplete="new-password" />
+      <label>${t("Mot de passe")}</label>
+      <input type="password" id="signup-password" placeholder="${t('8 caractères min., 1 majuscule, 1 caractère spécial')}" autocomplete="new-password" />
     </div>
     <div class="field">
-      <label>Confirme le mot de passe</label>
+      <label>${t("Confirme le mot de passe")}</label>
       <input type="password" id="signup-password-confirm" placeholder="••••••••" autocomplete="new-password" />
     </div>
     <div class="field">
-      <label>Ta couleur</label>
+      <label>${t("Ta couleur")}</label>
       <div class="color-picker" id="color-picker">
         ${PALETTE.map(c => `<span class="color-swatch ${c===selectedColor?'selected':''}" data-color="${c}" style="background:${c}"></span>`).join("")}
       </div>
     </div>
     <div class="field">
-      <label>Photo de profil (facultatif)</label>
+      <label>${t("Photo de profil (facultatif)")}</label>
       <div class="avatar-upload-zone" id="signup-avatar-zone">
-        ${signupPhoto ? `<img src="${signupPhoto}" alt=""/>` : `<span>${icon("camera",15)} Ajouter</span>`}
+        ${signupPhoto ? `<img src="${signupPhoto}" alt=""/>` : `<span>${icon("camera",15)} ${t("Ajouter")}</span>`}
       </div>
     </div>
-    <button class="btn-primary" id="signup-submit">Créer mon compte</button>
-    <p class="helper-text">Un email de confirmation te sera envoyé — clique sur le lien avant de te connecter.</p>
+    <button class="btn-primary" id="signup-submit">${t("Créer mon compte")}</button>
+    <p class="helper-text">${t("Un email de confirmation te sera envoyé — clique sur le lien avant de te connecter.")}</p>
   `;
 }
 function renderForgotPasswordScreen(){
@@ -1295,18 +1509,18 @@ function renderForgotPasswordScreen(){
         <div class="brand-block" style="margin-bottom:26px;">
           <span class="brand-mark"></span>
           <h1 class="brand-title">A Wyle</h1>
-          <span class="brand-sub">Le carnet du groupe</span>
+          <span class="brand-sub">${t("Le carnet du groupe")}</span>
         </div>
         <div class="auth-card">
-          <h3 style="font-family:'Poppins',sans-serif; font-size:19px; margin:0 0 6px;">Mot de passe oublié</h3>
-          <p class="hint">Entre ton email, on t'envoie un lien pour choisir un nouveau mot de passe.</p>
+          <h3 style="font-family:'Poppins',sans-serif; font-size:19px; margin:0 0 6px;">${t("Mot de passe oublié")}</h3>
+          <p class="hint">${t("Entre ton email, on t'envoie un lien pour choisir un nouveau mot de passe.")}</p>
           <div id="auth-error"></div>
           <div class="field">
-            <label>Email</label>
+            <label>${t("Email")}</label>
             <input type="email" id="forgot-email" placeholder="toi@exemple.com" />
           </div>
-          <button class="btn-primary" id="forgot-submit">Envoyer le lien</button>
-          <button class="btn-text" id="back-to-login" style="margin-top:14px;">← Retour à la connexion</button>
+          <button class="btn-primary" id="forgot-submit">${t("Envoyer le lien")}</button>
+          <button class="btn-text" id="back-to-login" style="margin-top:14px;">${t("← Retour à la connexion")}</button>
         </div>
       </div>
     </div>
@@ -1318,19 +1532,19 @@ function renderResetPasswordScreen(){
       <div class="brand-block" style="margin-bottom:26px;">
         <span class="brand-mark"></span>
         <h1 class="brand-title">A Wyle</h1>
-        <span class="brand-sub">Choisis un nouveau mot de passe</span>
+        <span class="brand-sub">${t("Choisis un nouveau mot de passe")}</span>
       </div>
       <div class="auth-card">
         <div id="auth-error"></div>
         <div class="field">
-          <label>Nouveau mot de passe</label>
-          <input type="password" id="reset-password" placeholder="8 caractères min., 1 majuscule, 1 caractère spécial" autocomplete="new-password" />
+          <label>${t("Nouveau mot de passe")}</label>
+          <input type="password" id="reset-password" placeholder="${t('8 caractères min., 1 majuscule, 1 caractère spécial')}" autocomplete="new-password" />
         </div>
         <div class="field">
-          <label>Confirme le mot de passe</label>
+          <label>${t("Confirme le mot de passe")}</label>
           <input type="password" id="reset-password-confirm" placeholder="••••••••" autocomplete="new-password" />
         </div>
-        <button class="btn-primary" id="reset-submit">Enregistrer le nouveau mot de passe</button>
+        <button class="btn-primary" id="reset-submit">${t("Enregistrer le nouveau mot de passe")}</button>
       </div>
     </div>
   `;
@@ -1342,13 +1556,13 @@ function bindResetPasswordScreen(){
     const btn = e.currentTarget;
     const password = document.getElementById("reset-password").value;
     const confirm = document.getElementById("reset-password-confirm").value;
-    if(!isStrongPassword(password)){ setError("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial."); return; }
-    if(password !== confirm){ setError("Les deux mots de passe ne correspondent pas."); return; }
-    btn.disabled = true; btn.textContent = "Enregistrement…";
+    if(!isStrongPassword(password)){ setError(t("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial.")); return; }
+    if(password !== confirm){ setError(t("Les deux mots de passe ne correspondent pas.")); return; }
+    btn.disabled = true; btn.textContent = t("Enregistrement…");
     const { error } = await sb.auth.updateUser({ password });
-    btn.disabled = false; btn.textContent = "Enregistrer le nouveau mot de passe";
-    if(error){ setError("Impossible de changer le mot de passe pour l'instant."); return; }
-    showToast("Mot de passe mis à jour ✅");
+    btn.disabled = false; btn.textContent = t("Enregistrer le nouveau mot de passe");
+    if(error){ setError(t("Impossible de changer le mot de passe pour l'instant.")); return; }
+    showToast(t("Mot de passe mis à jour ✅"));
     const { data: { user } } = await sb.auth.getUser();
     if(user){
       currentUser = await buildCurrentUser(user);
@@ -1360,8 +1574,11 @@ function bindResetPasswordScreen(){
 }
 function bindAuth(){
   bindInstallBanner();
-  document.querySelectorAll(".auth-tab").forEach(tab=>{
+  document.querySelectorAll(".auth-tab[data-mode]").forEach(tab=>{
     tab.addEventListener("click", ()=>{ authMode = tab.dataset.mode; render(); });
+  });
+  document.querySelectorAll("[data-lang]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ signupLang = btn.dataset.lang; render(); });
   });
   const errBox = document.getElementById("auth-error");
   function setError(msg){ if(errBox) errBox.innerHTML = msg ? `<p class="form-error">${msg}</p>` : ""; }
@@ -1370,16 +1587,16 @@ function bindAuth(){
     document.getElementById("back-to-login").addEventListener("click", ()=>{ authMode = "login"; render(); });
     document.getElementById("forgot-submit").addEventListener("click", async ()=>{
       const email = document.getElementById("forgot-email").value.trim();
-      if(!isValidEmail(email)){ setError("Entre un email valide."); return; }
+      if(!isValidEmail(email)){ setError(t("Entre un email valide.")); return; }
       const { error } = await sb.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + window.location.pathname
       });
       if(error){
         console.error("resetPasswordForEmail error", error.status, error.message);
-        setError("Erreur : " + error.message + (error.status ? " (code " + error.status + ")" : ""));
+        setError((lang()==="en"?"Error: ":"Erreur : ") + error.message + (error.status ? " (code " + error.status + ")" : ""));
         return;
       }
-      showToast("Email envoyé — vérifie ta boîte de réception 📬");
+      showToast(t("Email envoyé — vérifie ta boîte de réception 📬"));
       authMode = "login";
       render();
     });
@@ -1392,11 +1609,11 @@ function bindAuth(){
       const btn = e.currentTarget;
       const email = document.getElementById("login-email").value.trim();
       const password = document.getElementById("login-password").value;
-      if(!isValidEmail(email) || !password){ setError("Entre ton email et ton mot de passe."); return; }
-      btn.disabled = true; btn.textContent = "Connexion…";
+      if(!isValidEmail(email) || !password){ setError(t("Entre ton email et ton mot de passe.")); return; }
+      btn.disabled = true; btn.textContent = t("Connexion…");
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
-      btn.disabled = false; btn.textContent = "Se connecter";
-      if(error){ setError("Email ou mot de passe incorrect, ou compte non confirmé."); return; }
+      btn.disabled = false; btn.textContent = t("Se connecter");
+      if(error){ setError(t("Email ou mot de passe incorrect, ou compte non confirmé.")); return; }
       currentUser = await buildCurrentUser(data.user);
       tryPendingJoin();
     });
@@ -1414,36 +1631,36 @@ function bindAuth(){
       const email = document.getElementById("signup-email").value.trim();
       const password = document.getElementById("signup-password").value;
       const confirm = document.getElementById("signup-password-confirm").value;
-      if(!name){ setError("Entre ton prénom."); return; }
-      if(!isValidEmail(email)){ setError("Entre un email valide."); return; }
-      if(!isStrongPassword(password)){ setError("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial."); return; }
-      if(password !== confirm){ setError("Les deux mots de passe ne correspondent pas."); return; }
-      btn.disabled = true; btn.textContent = "Création…";
+      if(!name){ setError(t("Entre ton prénom.")); return; }
+      if(!isValidEmail(email)){ setError(t("Entre un email valide.")); return; }
+      if(!isStrongPassword(password)){ setError(t("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial.")); return; }
+      if(password !== confirm){ setError(t("Les deux mots de passe ne correspondent pas.")); return; }
+      btn.disabled = true; btn.textContent = t("Création…");
       const { data, error } = await sb.auth.signUp({
         email, password,
-        options: { data: { display_name: name, avatar_color: selectedColor, avatar_photo: signupPhoto || null } }
+        options: { data: { display_name: name, avatar_color: selectedColor, avatar_photo: signupPhoto || null, lang: signupLang } }
       });
       if(error){
-        btn.disabled = false; btn.textContent = "Créer mon compte";
+        btn.disabled = false; btn.textContent = t("Créer mon compte");
         console.error("signUp error", error.status, error.message);
-        setError("Erreur : " + error.message + (error.status ? " (code " + error.status + ")" : ""));
+        setError((lang()==="en"?"Error: ":"Erreur : ") + error.message + (error.status ? " (code " + error.status + ")" : ""));
         return;
       }
       const userId = data.user && data.user.id;
       // If a session exists immediately (e.g. email confirmation is off), write the
       // profile now while authenticated. Otherwise it's created on first login instead,
-      // using the display_name/avatar_color/avatar_photo metadata stashed above —
+      // using the display_name/avatar_color/avatar_photo/lang metadata stashed above —
       // see buildCurrentUser().
       if(userId && data.session){
-        await upsertProfile(userId, { displayName: name, avatarColor: selectedColor, avatarPhoto: signupPhoto || null });
+        await upsertProfile(userId, { displayName: name, avatarColor: selectedColor, avatarPhoto: signupPhoto || null, lang: signupLang });
       }
-      btn.disabled = false; btn.textContent = "Créer mon compte";
+      btn.disabled = false; btn.textContent = t("Créer mon compte");
       if(data.session){
         currentUser = await buildCurrentUser(data.user);
         signupPhoto = null;
         tryPendingJoin();
       } else {
-        showToast("Compte créé — vérifie ta boîte mail pour confirmer, puis connecte-toi 📬");
+        showToast(t("Compte créé — vérifie ta boîte mail pour confirmer, puis connecte-toi 📬"));
         signupPhoto = null;
         authMode = "login";
         render();
@@ -1457,7 +1674,7 @@ function renderHomeScreen(){
   const groups = myGroups();
   return `
     <div class="app-header">
-      <h2>Mes carnets</h2>
+      <h2>${t("Mes carnets")}</h2>
       <span class="header-avatar" id="header-avatar" style="${currentUser.avatarPhoto ? 'padding:0;overflow:hidden;' : 'background:'+currentUser.avatarColor}">${currentUser.avatarPhoto ? `<img src="${currentUser.avatarPhoto}" alt="" style="width:100%;height:100%;object-fit:cover;"/>` : currentUser.displayName[0].toUpperCase()}</span>
     </div>
     <div class="screen">
@@ -1466,7 +1683,7 @@ function renderHomeScreen(){
         ${groups.length === 0 ? `
           <div class="empty-state">
             <span class="big-emoji">${icon("book",40)}</span>
-            Tu n'as pas encore de carnet.<br/>Crée un groupe ou rejoins celui de tes amis avec leur code.
+            ${t("Tu n'as pas encore de carnet.")}<br/>${t("Crée un groupe ou rejoins celui de tes amis avec leur code.")}
           </div>
         ` : `
           ${groups.map(g => {
@@ -1478,8 +1695,8 @@ function renderHomeScreen(){
                 ${last ? `<img class="group-thumb" src="${last.photo}" style="object-position:${last.photoStyle ? last.photoStyle.replace('object-position:','') : '50% 50%'}" alt=""/>` : `<div class="group-thumb placeholder">${icon("camera",20)}</div>`}
                 <div class="info">
                   <p class="gname">${escapeHtml(g.name)}</p>
-                  <p class="gmeta">${g.memberUsernames.length} membre${g.memberUsernames.length>1?"s":""} · ${posts.length} moment${posts.length>1?"s":""}</p>
-                  ${unseen > 0 ? `<p class="new-moments"><span class="dot-badge"></span>${unseen} nouveau${unseen>1?"x":""} moment${unseen>1?"s":""}</p>` : ""}
+                  <p class="gmeta">${nMembers(g.memberUsernames.length)} · ${nMoments(posts.length)}</p>
+                  ${unseen > 0 ? `<p class="new-moments"><span class="dot-badge"></span>${nNewMoments(unseen)}</p>` : ""}
                 </div>
                 <span class="chev">›</span>
               </div>
@@ -1487,8 +1704,8 @@ function renderHomeScreen(){
           }).join("")}
         `}
         <div class="home-actions">
-          <button class="btn-primary" id="go-create-group">+ Créer un groupe</button>
-          <button class="btn-secondary" id="go-join-group">${icon("key",15)} Rejoindre avec un code</button>
+          <button class="btn-primary" id="go-create-group">${t("+ Créer un groupe")}</button>
+          <button class="btn-secondary" id="go-join-group">${icon("key",15)} ${t("Rejoindre avec un code")}</button>
         </div>
       </div>
     </div>
@@ -1520,8 +1737,8 @@ function renderBottomNav(active){
   const profileIcon = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 19.5a7.2 7.2 0 0 1 14.4 0"/></svg>`;
   return `
     <div class="bottom-nav">
-      <button class="nav-btn ${active==='home'?'active':''}" data-nav="home">${homeIcon}Carnets</button>
-      <button class="nav-btn ${active==='profile'?'active':''}" data-nav="profile">${profileIcon}Profil</button>
+      <button class="nav-btn ${active==='home'?'active':''}" data-nav="home">${homeIcon}${t("Carnets")}</button>
+      <button class="nav-btn ${active==='profile'?'active':''}" data-nav="profile">${profileIcon}${t("Profil")}</button>
     </div>
   `;
 }
@@ -1556,7 +1773,7 @@ function renderMyPhotosSection(){
   }
   const mine = myAuthoredPosts();
   if(mine.length === 0){
-    return `<div class="empty-state" style="padding:20px 10px;"><span class="big-emoji">${icon("camera",40)}</span>Tu n'as encore rien publié.</div>`;
+    return `<div class="empty-state" style="padding:20px 10px;"><span class="big-emoji">${icon("camera",40)}</span>${t("Tu n'as encore rien publié.")}</div>`;
   }
   return `
     <div class="my-photos-grid">
@@ -1567,7 +1784,7 @@ function renderMyPhotosSection(){
             <img src="${post.photo}" style="${post.photoStyle||''}" alt=""/>
             <div class="mp-overlay">
               <span>${escapeHtml(groupName)}</span>
-              ${totalReactions > 0 ? `<span>${totalReactions} réaction${totalReactions>1?"s":""}</span>` : `<span>Aucune réaction</span>`}
+              ${totalReactions > 0 ? `<span>${nReactions(totalReactions)}</span>` : `<span>${t("Aucune réaction")}</span>`}
             </div>
           </div>
         `;
@@ -1592,7 +1809,7 @@ function renderProfileScreen(){
   const groups = myGroups();
   return `
     <div class="app-header">
-      <h2>Mon profil</h2>
+      <h2>${t("Mon profil")}</h2>
       <span style="width:32px"></span>
     </div>
     <div class="screen">
@@ -1602,16 +1819,21 @@ function renderProfileScreen(){
           <h3>${escapeHtml(currentUser.displayName)}</h3>
           <span class="uname">${currentUser.email}</span>
         </div>
-        <p class="section-label">${groups.length} groupe${groups.length>1?"s":""}</p>
+        <p class="section-label">${t("Langue")}</p>
+        <div class="auth-tabs" id="profile-lang-toggle" style="margin-bottom:18px;">
+          <button type="button" class="auth-tab ${currentLang==='fr'?'active':''}" data-profile-lang="fr">Français</button>
+          <button type="button" class="auth-tab ${currentLang==='en'?'active':''}" data-profile-lang="en">English</button>
+        </div>
+        <p class="section-label">${nGroups(groups.length)}</p>
         <div class="profile-list">
           ${groups.map(g => `<div class="list-row" data-group="${g.id}"><span>${icon("book",16)}</span> ${escapeHtml(g.name)}</div>`).join("")}
-          <div class="list-row" id="edit-profile-btn" style="margin-top:14px;"><span>${icon("pencil",16)}</span> Modifier mon profil</div>
-          <div class="list-row" id="push-toggle-btn"><span>${icon("bell",16)}</span> <span id="push-toggle-label">Notifications</span></div>
-          <div class="list-row" id="fix-old-posts-btn"><span>${icon("wrench",16)}</span> Corriger mes anciennes publications</div>
-          <div class="list-row" id="install-help-btn"><span>${icon("smartphone",16)}</span> Comment installer l'appli ?</div>
-          <div class="list-row" id="logout-btn"><span>${icon("logout",16)}</span> <span class="danger" style="color:var(--danger)">Se déconnecter</span></div>
+          <div class="list-row" id="edit-profile-btn" style="margin-top:14px;"><span>${icon("pencil",16)}</span> ${t("Modifier mon profil")}</div>
+          <div class="list-row" id="push-toggle-btn"><span>${icon("bell",16)}</span> <span id="push-toggle-label">${t("Notifications")}</span></div>
+          <div class="list-row" id="fix-old-posts-btn"><span>${icon("wrench",16)}</span> ${t("Corriger mes anciennes publications")}</div>
+          <div class="list-row" id="install-help-btn"><span>${icon("smartphone",16)}</span> ${t("Comment installer l'appli ?")}</div>
+          <div class="list-row" id="logout-btn"><span>${icon("logout",16)}</span> <span class="danger" style="color:var(--danger)">${t("Se déconnecter")}</span></div>
         </div>
-        <p class="section-label" style="margin-top:26px;">Mes photos</p>
+        <p class="section-label" style="margin-top:26px;">${t("Mes photos")}</p>
         <div id="my-photos-section">${renderMyPhotosSection()}</div>
       </div>
     </div>
@@ -1634,6 +1856,16 @@ function bindProfile(){
     editProfilePhoto = undefined;
     modalType = "editProfile"; renderOverlay(); openOverlay();
   });
+  document.querySelectorAll("[data-profile-lang]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const newLang = btn.dataset.profileLang;
+      if(newLang === currentLang) return;
+      currentLang = newLang;
+      currentUser.lang = newLang;
+      await upsertProfile(currentUser.id, { lang: newLang });
+      render();
+    });
+  });
   const pushBtn = document.getElementById("push-toggle-btn");
   const pushLabel = document.getElementById("push-toggle-label");
   pushBtn.addEventListener("click", async ()=>{
@@ -1643,21 +1875,21 @@ function bindProfile(){
     if(screen === "profile"){ render(); }
   });
   if(!pushSupported()){
-    pushLabel.textContent = "Notifications (non supportées ici)";
+    pushLabel.textContent = t("Notifications (non supportées ici)");
     pushBtn.style.opacity = "0.5";
   } else {
     getPushSubscription().then(sub=>{
-      pushLabel.textContent = sub ? "Notifications activées ✅ (toucher pour désactiver)" : "Activer les notifications";
+      pushLabel.textContent = sub ? t("Notifications activées ✅ (toucher pour désactiver)") : t("Activer les notifications");
     });
   }
   document.getElementById("fix-old-posts-btn").addEventListener("click", async (e)=>{
     const btn = e.currentTarget;
     const originalHtml = btn.innerHTML;
-    btn.innerHTML = `<span>⏳</span> Correction en cours…`;
+    btn.innerHTML = `<span>⏳</span> ${t("Correction en cours…")}`;
     await syncAuthorInfoEverywhere(currentUser.id, currentUser.displayName, currentUser.avatarColor, currentUser.avatarPhoto);
     postsCache = {};
     btn.innerHTML = originalHtml;
-    showToast("Anciennes publications corrigées ✅");
+    showToast(t("Anciennes publications corrigées ✅"));
   });
   document.getElementById("install-help-btn").addEventListener("click", ()=>{
     modalType = "installHelp"; renderOverlay(); openOverlay();
@@ -1688,23 +1920,23 @@ function renderCreateGroupScreen(){
   return `
     <div class="app-header">
       <button class="icon-btn" id="back-btn">←</button>
-      <h2>Nouveau groupe</h2>
+      <h2>${t("Nouveau groupe")}</h2>
       <span style="width:34px"></span>
     </div>
     <div class="screen">
       <div class="form-content">
-        <h3>Créer un carnet</h3>
-        <p class="hint">Donne un nom à ton groupe. Tu recevras un code à partager avec tes amis pour qu'ils te rejoignent.</p>
+        <h3>${t("Créer un carnet")}</h3>
+        <p class="hint">${t("Donne un nom à ton groupe. Tu recevras un code à partager avec tes amis pour qu'ils te rejoignent.")}</p>
         <div id="create-error"></div>
         <div class="field">
-          <label>Nom du groupe</label>
+          <label>${t("Nom du groupe")}</label>
           <input type="text" id="group-name" placeholder="ex. Les 5 copains" />
         </div>
         <div class="field">
-          <label>Sous-titre (optionnel)</label>
+          <label>${t("Sous-titre (optionnel)")}</label>
           <input type="text" id="group-subtitle" placeholder="ex. Copains d'enfance" />
         </div>
-        <button class="btn-primary" id="create-submit">Créer le groupe</button>
+        <button class="btn-primary" id="create-submit">${t("Créer le groupe")}</button>
       </div>
     </div>
   `;
@@ -1716,12 +1948,12 @@ function bindCreateGroup(){
     const errBox = document.getElementById("create-error");
     const name = document.getElementById("group-name").value.trim();
     const subtitle = document.getElementById("group-subtitle").value.trim();
-    if(!name){ errBox.innerHTML = `<p class="form-error">Donne un nom à ton groupe.</p>`; return; }
-    btn.disabled = true; btn.textContent = "Création…";
+    if(!name){ errBox.innerHTML = `<p class="form-error">${t("Donne un nom à ton groupe.")}</p>`; return; }
+    btn.disabled = true; btn.textContent = t("Création…");
     const { group: g, error } = await createGroupInDb(name, subtitle);
-    btn.disabled = false; btn.textContent = "Créer le groupe";
+    btn.disabled = false; btn.textContent = t("Créer le groupe");
     if(!g){
-      errBox.innerHTML = `<p class="form-error">Erreur : ${error ? error.message : "inconnue"}${error && error.code ? " (code " + error.code + ")" : ""}</p>`;
+      errBox.innerHTML = `<p class="form-error">${lang()==="en"?"Error: ":"Erreur : "}${error ? error.message : t("inconnue")}${error && error.code ? " (code " + error.code + ")" : ""}</p>`;
       return;
     }
     postsCache[g.id] = [];
@@ -1740,19 +1972,19 @@ function renderJoinGroupScreen(){
   return `
     <div class="app-header">
       <button class="icon-btn" id="back-btn">←</button>
-      <h2>Rejoindre un groupe</h2>
+      <h2>${t("Rejoindre un groupe")}</h2>
       <span style="width:34px"></span>
     </div>
     <div class="screen">
       <div class="form-content">
-        <h3>Entre le code</h3>
-        <p class="hint">Demande le code d'invitation à 6 caractères à la personne qui a créé le groupe.</p>
+        <h3>${t("Entre le code")}</h3>
+        <p class="hint">${t("Demande le code d'invitation à 6 caractères à la personne qui a créé le groupe.")}</p>
         <div id="join-error"></div>
         <div class="field">
-          <label>Code d'invitation</label>
+          <label>${t("Code d'invitation")}</label>
           <input type="text" id="join-code" maxlength="6" placeholder="ex. K7T2QP" style="text-transform:uppercase; letter-spacing:2px;" />
         </div>
-        <button class="btn-primary" id="join-submit">Rejoindre</button>
+        <button class="btn-primary" id="join-submit">${t("Rejoindre")}</button>
       </div>
     </div>
   `;
@@ -1763,11 +1995,11 @@ function bindJoinGroup(){
     const btn = e.currentTarget;
     const errBox = document.getElementById("join-error");
     const code = document.getElementById("join-code").value.trim().toUpperCase();
-    if(!code){ errBox.innerHTML = `<p class="form-error">Entre un code.</p>`; return; }
-    btn.disabled = true; btn.textContent = "Connexion…";
+    if(!code){ errBox.innerHTML = `<p class="form-error">${t("Entre un code.")}</p>`; return; }
+    btn.disabled = true; btn.textContent = t("Connexion…");
     const groupId = await joinGroupByCodeInDb(code);
-    btn.disabled = false; btn.textContent = "Rejoindre";
-    if(!groupId){ errBox.innerHTML = `<p class="form-error">Ce code ne correspond à aucun groupe.</p>`; return; }
+    btn.disabled = false; btn.textContent = t("Rejoindre");
+    if(!groupId){ errBox.innerHTML = `<p class="form-error">${t("Ce code ne correspond à aucun groupe.")}</p>`; return; }
     await loadGroupsList();
     const g = getGroup(groupId);
     activeGroupId = groupId;
@@ -1775,7 +2007,7 @@ function bindJoinGroup(){
     screen = "group";
     render();
     if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
-    showToast(`Bienvenue dans ${g ? g.name : "le groupe"} 🎉`);
+    showToast(`${t("Bienvenue dans")} ${g ? g.name : t("le groupe")} 🎉`);
   });
 }
 
@@ -1788,12 +2020,12 @@ function renderGroupScreen(){
     <div class="app-header">
       <button class="icon-btn" id="back-btn">←</button>
       <h2>${escapeHtml(group.name)}</h2>
-      <button class="icon-btn" id="invite-btn" title="Inviter">${icon("key",18)}</button>
-      <button class="icon-btn" id="book-btn" title="Livre de l'année">${icon("bookOpen",18)}</button>
+      <button class="icon-btn" id="invite-btn" title="${t("Inviter")}">${icon("key",18)}</button>
+      <button class="icon-btn" id="book-btn" title="${t("Livre de l'année")}">${icon("bookOpen",18)}</button>
     </div>
     <div class="segmented">
-      <button class="seg-btn ${activeView==='fil'?'active':''}" data-view="fil">Fil</button>
-      <button class="seg-btn ${activeView==='calendrier'?'active':''}" data-view="calendrier">Calendrier</button>
+      <button class="seg-btn ${activeView==='fil'?'active':''}" data-view="fil">${t("Fil")}</button>
+      <button class="seg-btn ${activeView==='calendrier'?'active':''}" data-view="calendrier">${t("Calendrier")}</button>
     </div>
     <div class="screen" id="group-scroll">
       <div class="pull-indicator" id="pull-indicator"><div class="spinner-sm"></div></div>
@@ -1826,7 +2058,7 @@ function buildStoryMonths(posts){
   const keys = Object.keys(buckets).sort((a,b)=> b.localeCompare(a)); // most recent month first
   return keys.map(key => {
     const [y, m] = key.split("-");
-    return { key, label: MONTHS_FR[parseInt(m,10)-1].slice(0,3) + " " + y.slice(2), frames: buckets[key] };
+    return { key, label: months()[parseInt(m,10)-1].slice(0,3) + " " + y.slice(2), frames: buckets[key] };
   });
 }
 function renderStoryBar(storyMonths){
@@ -1853,7 +2085,7 @@ function renderFeed(group, posts){
     ${sorted.length === 0 ? `
       <div class="empty-state">
         <span class="big-emoji">${icon("camera",40)}</span>
-        Aucune photo pour l'instant.<br/>Appuie sur + pour partager le premier moment.
+        ${t("Aucune photo pour l'instant.")}<br/>${t("Appuie sur + pour partager le premier moment.")}
       </div>
     ` : `
       <div class="feed">
@@ -1868,11 +2100,11 @@ function renderFeed(group, posts){
             <div class="post-body">
               <p class="post-caption">${escapeHtml(p.caption)}</p>
               ${p.location ? `<p class="location-line">${icon("pin",13)} ${escapeHtml(p.location)}</p>` : ""}
-              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">${icon("tag",13)} avec ${p.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
+              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">${icon("tag",13)} ${t("avec")} ${p.taggedUsers.map(tg=>escapeHtml(tg.displayName)).join(", ")}</p>` : ""}
               <div class="post-foot">
                 ${Object.entries(reactionCounts(p)).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
                 <span>${icon("comment",14)} ${p.comments.length}</span>
-                ${p.favorite ? `<span>⭐ dans le livre</span>` : ""}
+                ${p.favorite ? `<span>⭐ ${t("dans le livre")}</span>` : ""}
               </div>
             </div>
           </article>
@@ -2002,14 +2234,14 @@ function renderMonthView(group, posts){
     <div class="month-nav">
       <button class="icon-btn" style="color:var(--pine)" id="cal-prev-month">‹</button>
       <div class="month-nav-title">
-        <h3>${MONTHS_FR[month]} ${year}</h3>
-        <span>${monthPostCount} moment${monthPostCount>1?"s":""}</span>
+        <h3>${months()[month]} ${year}</h3>
+        <span>${nMoments(monthPostCount)}</span>
       </div>
       <button class="icon-btn" style="color:var(--pine)" id="cal-next-month" ${isCurrentMonth ? "disabled" : ""}>›</button>
     </div>
-    <div class="dow-row">${["L","M","M","J","V","S","D"].map(d=>`<span>${d}</span>`).join("")}</div>
+    <div class="dow-row">${dow().map(d=>`<span>${d}</span>`).join("")}</div>
     <div class="day-grid-lg">${cells}</div>
-    <div class="cal-legend"><span class="sw" style="background:var(--gold-soft)"></span> appuie sur un jour pour voir ses moments</div>
+    <div class="cal-legend"><span class="sw" style="background:var(--gold-soft)"></span> ${t("appuie sur un jour pour voir ses moments")}</div>
   `;
 }
 function renderDayView(group, posts, dateStr){
@@ -2018,18 +2250,18 @@ function renderDayView(group, posts, dateStr){
   const isFuture = shiftDate(dateStr, 1) > todayISO();
   return `
     <div class="day-view-nav">
-      <button class="icon-btn" style="color:var(--pine)" id="cal-back-to-month">← Calendrier</button>
+      <button class="icon-btn" style="color:var(--pine)" id="cal-back-to-month">${t("← Calendrier")}</button>
     </div>
     <div class="month-nav">
       <button class="icon-btn" style="color:var(--pine)" id="cal-prev-day">‹</button>
       <div class="month-nav-title">
-        <h3>${d.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" })}</h3>
-        <span>${dayPosts.length} moment${dayPosts.length>1?"s":""}</span>
+        <h3>${d.toLocaleDateString(dateLocale(), { weekday:"long", day:"numeric", month:"long" })}</h3>
+        <span>${nMoments(dayPosts.length)}</span>
       </div>
       <button class="icon-btn" style="color:var(--pine)" id="cal-next-day" ${isFuture ? "disabled" : ""}>›</button>
     </div>
     ${dayPosts.length === 0 ? `
-      <div class="empty-state"><span class="big-emoji">${icon("calendar",40)}</span>Aucun moment partagé ce jour-là.</div>
+      <div class="empty-state"><span class="big-emoji">${icon("calendar",40)}</span>${t("Aucun moment partagé ce jour-là.")}</div>
     ` : `
       <div class="feed">
         ${dayPosts.map(p => `
@@ -2043,11 +2275,11 @@ function renderDayView(group, posts, dateStr){
             <div class="post-body">
               <p class="post-caption">${escapeHtml(p.caption)}</p>
               ${p.location ? `<p class="location-line">${icon("pin",13)} ${escapeHtml(p.location)}</p>` : ""}
-              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">${icon("tag",13)} avec ${p.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
+              ${p.taggedUsers && p.taggedUsers.length ? `<p class="location-line">${icon("tag",13)} ${t("avec")} ${p.taggedUsers.map(tg=>escapeHtml(tg.displayName)).join(", ")}</p>` : ""}
               <div class="post-foot">
                 ${Object.entries(reactionCounts(p)).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
                 <span>${icon("comment",14)} ${p.comments.length}</span>
-                ${p.favorite ? `<span>⭐ dans le livre</span>` : ""}
+                ${p.favorite ? `<span>⭐ ${t("dans le livre")}</span>` : ""}
               </div>
             </div>
           </article>
@@ -2062,19 +2294,19 @@ function renderBook(group, posts){
   const favorites = posts.filter(p => p.favorite);
   return `
     <div class="book-intro">
-      <h3 style="font-family:'Poppins',sans-serif; font-size:19px; margin:0 0 8px;">Le livre de ${escapeHtml(group.name)}</h3>
-      <p>Marquez vos photos préférées avec ⭐ tout au long de l'année : elles atterrissent ici, prêtes pour le livre imprimé envoyé à chaque membre en fin d'année.</p>
+      <h3 style="font-family:'Poppins',sans-serif; font-size:19px; margin:0 0 8px;">${t("Le livre de")} ${escapeHtml(group.name)}</h3>
+      <p>${t("Marquez vos photos préférées avec ⭐ tout au long de l'année : elles atterrissent ici, prêtes pour le livre imprimé envoyé à chaque membre en fin d'année.")}</p>
     </div>
     ${favorites.length === 0 ? `
-      <div class="empty-state"><span class="big-emoji">⭐</span>Aucune photo sélectionnée pour l'instant.<br/>Ouvre une photo dans le fil pour la marquer.</div>
+      <div class="empty-state"><span class="big-emoji">⭐</span>${t("Aucune photo sélectionnée pour l'instant.")}<br/>${t("Ouvre une photo dans le fil pour la marquer.")}</div>
     ` : `
       <div class="book-spread">
         <div class="book-grid">
           ${favorites.map(p => `<div class="book-photo"><img src="${p.photo}" style="${p.photoStyle||''}" alt=""/><div class="cap">${formatDateShort(p.date)} · ${escapeHtml(p.authorName)}</div></div>`).join("")}
         </div>
         <div class="book-actions">
-          <button class="btn-primary" id="order-book">Commander le livre</button>
-          <span class="book-price">${favorites.length} photo${favorites.length>1?"s":""} sélectionnée${favorites.length>1?"s":""}</span>
+          <button class="btn-primary" id="order-book">${t("Commander le livre")}</button>
+          <span class="book-price">${nSelectedPhotos(favorites.length)}</span>
         </div>
       </div>
     `}
@@ -2144,7 +2376,7 @@ function setupPullToRefresh(){
       await markGroupSeen(activeGroupId);
       updateAppBadge();
       renderGroupContentOnly();
-      showToast("Fil actualisé");
+      showToast(t("Fil actualisé"));
       refreshing = false;
     }
     indicator.style.height = "0px"; indicator.style.opacity = "0";
@@ -2164,7 +2396,7 @@ function attachContentHandlers(){
     el.addEventListener("click", ()=> openStoryViewer(Number(el.dataset.monthIndex), 0));
   });
   const orderBtn = document.getElementById("order-book");
-  if(orderBtn){ orderBtn.addEventListener("click", ()=> showToast("Commande envoyée — le livre sera imprimé et posté à chaque membre 📖")); }
+  if(orderBtn){ orderBtn.addEventListener("click", ()=> showToast(t("Commande envoyée — le livre sera imprimé et posté à chaque membre 📖"))); }
 
   // Calendar: month grid navigation
   const prevMonthBtn = document.getElementById("cal-prev-month");
@@ -2406,7 +2638,7 @@ function renderAdjustNewPhotoCropSheet(){
   const photo = newPostPhotos[adjustNewPhotoIndex];
   return `
     <div class="sheet-head">
-      <h4>Ajuster le cadrage</h4>
+      <h4>${t("Ajuster le cadrage")}</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
@@ -2419,17 +2651,17 @@ function renderAdjustNewPhotoCropSheet(){
           `).join("")}
         </div>
       ` : ""}
-      <p class="section-label" style="padding:14px 18px 0;">Aperçu dans le fil</p>
+      <p class="section-label" style="padding:14px 18px 0;">${t("Aperçu dans le fil")}</p>
       <div class="crop-preview">
         <img src="${photo.url}" id="crop-preview-img" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
       </div>
-      <p class="section-label" style="padding:16px 18px 0;">Appuie sur la photo pour choisir ce qui doit rester visible</p>
+      <p class="section-label" style="padding:16px 18px 0;">${t("Appuie sur la photo pour choisir ce qui doit rester visible")}</p>
       <div class="crop-full-wrap" id="crop-full-wrap">
         <img src="${photo.url}" id="crop-full-img" alt=""/>
         <div class="crop-full-marker" id="crop-full-marker" style="left:${adjustFocusX}%; top:${adjustFocusY}%;"></div>
       </div>
       <div class="form-block" style="padding-top:16px;">
-        <button class="btn-primary" id="save-crop-btn">Valider ce cadrage</button>
+        <button class="btn-primary" id="save-crop-btn">${t("Valider ce cadrage")}</button>
       </div>
     </div>
   `;
@@ -2473,7 +2705,7 @@ function renderAdjustCropSheet(){
   const photo = post.photos[adjustCropPhotoIndex];
   return `
     <div class="sheet-head">
-      <h4>Ajuster le cadrage</h4>
+      <h4>${t("Ajuster le cadrage")}</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
@@ -2486,17 +2718,17 @@ function renderAdjustCropSheet(){
           `).join("")}
         </div>
       ` : ""}
-      <p class="section-label" style="padding:14px 18px 0;">Aperçu dans le fil</p>
+      <p class="section-label" style="padding:14px 18px 0;">${t("Aperçu dans le fil")}</p>
       <div class="crop-preview">
         <img src="${photo.url}" id="crop-preview-img" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
       </div>
-      <p class="section-label" style="padding:16px 18px 0;">Appuie sur la photo pour choisir ce qui doit rester visible</p>
+      <p class="section-label" style="padding:16px 18px 0;">${t("Appuie sur la photo pour choisir ce qui doit rester visible")}</p>
       <div class="crop-full-wrap" id="crop-full-wrap">
         <img src="${photo.url}" id="crop-full-img" alt=""/>
         <div class="crop-full-marker" id="crop-full-marker" style="left:${adjustFocusX}%; top:${adjustFocusY}%;"></div>
       </div>
       <div class="form-block" style="padding-top:16px;">
-        <button class="btn-primary" id="save-crop-btn">Enregistrer ce cadrage</button>
+        <button class="btn-primary" id="save-crop-btn">${t("Enregistrer ce cadrage")}</button>
       </div>
     </div>
   `;
@@ -2530,15 +2762,15 @@ function bindAdjustCropSheet(){
   fullWrap.addEventListener("click", (e)=> setFocusFromEvent(e.clientX, e.clientY));
   document.getElementById("save-crop-btn").addEventListener("click", async (e)=>{
     const btn = e.currentTarget;
-    btn.disabled = true; btn.textContent = "Enregistrement…";
+    btn.disabled = true; btn.textContent = t("Enregistrement…");
     const photo = post.photos[adjustCropPhotoIndex];
     await setPhotoFocus(photo.id, adjustFocusX, adjustFocusY);
     await loadGroupPosts(group.id);
-    btn.disabled = false; btn.textContent = "Enregistrer ce cadrage";
+    btn.disabled = false; btn.textContent = t("Enregistrer ce cadrage");
     modalType = "postDetail";
     renderOverlay();
     renderGroupContentOnly();
-    showToast("Cadrage mis à jour ✅");
+    showToast(t("Cadrage mis à jour ✅"));
   });
 }
 
@@ -2546,7 +2778,7 @@ function renderEditProfileSheet(){
   const photo = editProfilePhoto !== undefined ? editProfilePhoto : currentUser.avatarPhoto;
   return `
     <div class="sheet-head">
-      <h4>Modifier mon profil</h4>
+      <h4>${t("Modifier mon profil")}</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
@@ -2556,28 +2788,28 @@ function renderEditProfileSheet(){
           <div class="avatar-upload-zone" id="edit-avatar-zone">
             ${photo ? `<img src="${photo}" alt=""/>` : `<span>${icon("camera",22)}</span>`}
           </div>
-          <button class="btn-text" id="remove-avatar-btn" style="${photo ? '' : 'display:none;'}">Retirer la photo</button>
+          <button class="btn-text" id="remove-avatar-btn" style="${photo ? '' : 'display:none;'}">${t("Retirer la photo")}</button>
         </div>
         <div class="field">
-          <label>Prénom</label>
+          <label>${t("Prénom")}</label>
           <input type="text" id="edit-name" value="${escapeHtml(currentUser.displayName)}" />
         </div>
         <div class="field">
-          <label>Couleur</label>
+          <label>${t("Couleur")}</label>
           <div class="color-picker" id="edit-color-picker">
             ${PALETTE.map(c => `<span class="color-swatch ${c===selectedColor?'selected':''}" data-color="${c}" style="background:${c}"></span>`).join("")}
           </div>
         </div>
         <div class="field">
-          <label>Email</label>
+          <label>${t("Email")}</label>
           <input type="email" id="edit-email" value="${escapeHtml(currentUser.email)}" />
         </div>
-        <p class="helper-text" style="margin-top:-8px;">Changer l'email envoie un lien de confirmation à la nouvelle adresse.</p>
+        <p class="helper-text" style="margin-top:-8px;">${t("Changer l'email envoie un lien de confirmation à la nouvelle adresse.")}</p>
         <div class="field">
-          <label>Nouveau mot de passe (laisser vide pour ne pas changer)</label>
-          <input type="password" id="edit-password" placeholder="8 caractères min., 1 majuscule, 1 caractère spécial" autocomplete="new-password" />
+          <label>${t("Nouveau mot de passe (laisser vide pour ne pas changer)")}</label>
+          <input type="password" id="edit-password" placeholder="${t('8 caractères min., 1 majuscule, 1 caractère spécial')}" autocomplete="new-password" />
         </div>
-        <button class="btn-primary" id="save-profile-btn">Enregistrer</button>
+        <button class="btn-primary" id="save-profile-btn">${t("Enregistrer")}</button>
       </div>
     </div>
   `;
@@ -2608,10 +2840,10 @@ function bindEditProfileSheet(){
     const name = document.getElementById("edit-name").value.trim();
     const email = document.getElementById("edit-email").value.trim();
     const password = document.getElementById("edit-password").value;
-    if(!name){ setError("Entre ton prénom."); return; }
-    if(!isValidEmail(email)){ setError("Entre un email valide."); return; }
-    if(password && !isStrongPassword(password)){ setError("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial."); return; }
-    btn.disabled = true; btn.textContent = "Enregistrement…";
+    if(!name){ setError(t("Entre ton prénom.")); return; }
+    if(!isValidEmail(email)){ setError(t("Entre un email valide.")); return; }
+    if(password && !isStrongPassword(password)){ setError(t("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial.")); return; }
+    btn.disabled = true; btn.textContent = t("Enregistrement…");
 
     const authUpdates = {};
     if(email !== currentUser.email) authUpdates.email = email;
@@ -2619,8 +2851,8 @@ function bindEditProfileSheet(){
     if(Object.keys(authUpdates).length){
       const { error } = await sb.auth.updateUser(authUpdates);
       if(error){
-        btn.disabled = false; btn.textContent = "Enregistrer";
-        setError("Impossible de mettre à jour l'email/mot de passe pour l'instant.");
+        btn.disabled = false; btn.textContent = t("Enregistrer");
+        setError(t("Impossible de mettre à jour l'email/mot de passe pour l'instant."));
         return;
       }
     }
@@ -2631,10 +2863,10 @@ function bindEditProfileSheet(){
     currentUser.displayName = name;
     currentUser.avatarColor = selectedColor;
     currentUser.avatarPhoto = finalPhoto;
-    if(authUpdates.email) showToast("Vérifie ta nouvelle boîte mail pour confirmer le changement d'adresse 📬");
-    else showToast("Profil mis à jour partout ✅");
+    if(authUpdates.email) showToast(t("Vérifie ta nouvelle boîte mail pour confirmer le changement d'adresse 📬"));
+    else showToast(t("Profil mis à jour partout ✅"));
     editProfilePhoto = undefined;
-    btn.disabled = false; btn.textContent = "Enregistrer";
+    btn.disabled = false; btn.textContent = t("Enregistrer");
     closeOverlay();
     if(screen === "profile"){ render(); }
     else if(screen === "home"){ render(); }
@@ -2642,26 +2874,41 @@ function bindEditProfileSheet(){
 }
 
 function renderInstallHelpSheet(){
+  const isEn = lang() === "en";
   return `
     <div class="sheet-head">
-      <h4>Installer A Wyle</h4>
+      <h4>${t("Installer A Wyle")}</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
       <div class="form-block" style="padding-top:16px;">
-        <p class="section-label">Sur iPhone (Safari)</p>
+        <p class="section-label">${t("Sur iPhone (Safari)")}</p>
         <p style="font-size:13.5px; line-height:1.7; color:var(--ink); margin:0 0 20px;">
+          ${isEn ? `
+          1. Open the link in <strong>Safari</strong> (not Chrome, not a messaging app)<br/>
+          2. Tap the share icon (the square with an arrow pointing up)<br/>
+          3. Scroll down and tap <strong>"Add to Home Screen"</strong><br/>
+          4. Tap "Add" in the top right
+          ` : `
           1. Ouvre le lien dans <strong>Safari</strong> (pas Chrome, pas une appli de messagerie)<br/>
           2. Appuie sur l'icône de partage (le carré avec la flèche vers le haut)<br/>
           3. Fais défiler et appuie sur <strong>"Sur l'écran d'accueil"</strong><br/>
           4. Appuie sur "Ajouter" en haut à droite
+          `}
         </p>
-        <p class="section-label">Sur Android (Chrome)</p>
+        <p class="section-label">${t("Sur Android (Chrome)")}</p>
         <p style="font-size:13.5px; line-height:1.7; color:var(--ink); margin:0;">
+          ${isEn ? `
+          1. Open the link in <strong>Chrome</strong><br/>
+          2. Tap the ⋮ menu in the top right<br/>
+          3. Tap <strong>"Install app"</strong> or "Add to Home screen"<br/>
+          4. Confirm — the icon appears directly on your phone
+          ` : `
           1. Ouvre le lien dans <strong>Chrome</strong><br/>
           2. Appuie sur le menu ⋮ en haut à droite<br/>
           3. Appuie sur <strong>"Installer l'application"</strong> ou "Ajouter à l'écran d'accueil"<br/>
           4. Confirme — l'icône apparaît directement sur ton téléphone
+          `}
         </p>
       </div>
     </div>
@@ -2681,7 +2928,7 @@ function renderPostDetailSheet(){
     <div class="sheet-head">
       ${avatarHtml(post.authorName, post.authorAvatarColor, post.authorAvatarPhoto, "width:30px;height:30px;font-size:12px;")}
       <h4>${escapeHtml(post.authorName)} · ${formatDateShort(post.date)} · ${formatTime(post.createdAt)}</h4>
-      ${isAuthor ? `<button class="icon-btn" style="color:var(--ink)" id="edit-post-btn" title="Modifier">${postEditMode ? "✕" : icon("pencil",16)}</button>` : ""}
+      ${isAuthor ? `<button class="icon-btn" style="color:var(--ink)" id="edit-post-btn" title="${t("Modifier")}">${postEditMode ? "✕" : icon("pencil",16)}</button>` : ""}
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
@@ -2692,18 +2939,18 @@ function renderPostDetailSheet(){
       ${postEditMode ? `
         <div class="form-block" style="padding-top:14px;">
           <div class="field">
-            <label>Légende</label>
+            <label>${t("Légende")}</label>
             <input type="text" id="edit-caption-input" value="${escapeHtml(post.caption)}" />
           </div>
-          <button class="btn-secondary" id="change-photo-btn" style="margin-bottom:10px;">${icon("camera",15)} Changer la photo</button>
-          <button class="btn-secondary" id="adjust-crop-btn" style="margin-bottom:10px;">${icon("crop",15)} Ajuster le cadrage</button>
-          <button class="btn-primary" id="save-post-edit-btn" style="margin-bottom:10px;">Enregistrer</button>
-          <button class="btn-text" id="delete-post-btn" style="color:var(--danger);">${icon("trash",15)} Supprimer cette photo</button>
+          <button class="btn-secondary" id="change-photo-btn" style="margin-bottom:10px;">${icon("camera",15)} ${t("Changer la photo")}</button>
+          <button class="btn-secondary" id="adjust-crop-btn" style="margin-bottom:10px;">${icon("crop",15)} ${t("Ajuster le cadrage")}</button>
+          <button class="btn-primary" id="save-post-edit-btn" style="margin-bottom:10px;">${t("Enregistrer")}</button>
+          <button class="btn-text" id="delete-post-btn" style="color:var(--danger);">${icon("trash",15)} ${t("Supprimer cette photo")}</button>
         </div>
       ` : `
         <div class="modal-caption">${escapeHtml(post.caption)}</div>
         ${post.location ? `<p class="location-line" style="padding:0 18px 6px;">${icon("pin",13)} ${escapeHtml(post.location)}</p>` : ""}
-        ${post.taggedUsers && post.taggedUsers.length ? `<p class="location-line" style="padding:0 18px 10px;">${icon("tag",13)} avec ${post.taggedUsers.map(t=>escapeHtml(t.displayName)).join(", ")}</p>` : ""}
+        ${post.taggedUsers && post.taggedUsers.length ? `<p class="location-line" style="padding:0 18px 10px;">${icon("tag",13)} ${t("avec")} ${post.taggedUsers.map(tg=>escapeHtml(tg.displayName)).join(", ")}</p>` : ""}
       `}
       <div class="modal-reactions">
         ${REACTION_SET.map(e => {
@@ -2711,7 +2958,7 @@ function renderPostDetailSheet(){
           const mine = (post.reactionsByUser || {})[currentUser.id] === e;
           return `<button class="react-btn ${mine ? 'active-reaction':''}" data-emoji="${e}">${e} ${counts[e] || ""}</button>`;
         }).join("")}
-        <button class="react-btn" id="fav-toggle">${post.favorite ? icon("star",14,true) + " Dans le livre" : icon("star",14,false) + " Ajouter au livre"}</button>
+        <button class="react-btn" id="fav-toggle">${post.favorite ? icon("star",14,true) + " " + t("Dans le livre") : icon("star",14,false) + " " + t("Ajouter au livre")}</button>
       </div>
       <div class="modal-comments" id="modal-comments">
         ${post.comments.map(c => {
@@ -2727,10 +2974,10 @@ function renderPostDetailSheet(){
           return `
             <div class="comment">
               <span class="cname">${escapeHtml(c.author)}</span>${escapeHtml(c.text)}
-              ${mine ? `<button class="edit-comment-btn" data-comment="${c.id}" title="Modifier">${icon("pencil",13)}</button>` : ""}
+              ${mine ? `<button class="edit-comment-btn" data-comment="${c.id}" title="${t("Modifier")}">${icon("pencil",13)}</button>` : ""}
             </div>
           `;
-        }).join("") || `<div class="comment" style="color:var(--ink-soft)">Aucun commentaire pour l'instant.</div>`}
+        }).join("") || `<div class="comment" style="color:var(--ink-soft)">${t("Aucun commentaire pour l'instant.")}</div>`}
         <div class="replies-row">
           ${post.replies.map(r => `<img class="reply-thumb" src="${r.img}" title="${escapeHtml(r.author)}"/>`).join("")}
           <button class="reply-add" id="reply-add-btn">+</button>
@@ -2739,8 +2986,8 @@ function renderPostDetailSheet(){
     </div>
     <div class="modal-footer" style="position:relative;">
       <div class="mention-suggestions" id="mention-suggestions" style="display:none;"></div>
-      <input type="text" id="comment-input" placeholder="Écrire un commentaire… (@ pour mentionner)" />
-      <button class="send-btn" id="comment-send">Envoyer</button>
+      <input type="text" id="comment-input" placeholder="${t("Écrire un commentaire… (@ pour mentionner)")}" />
+      <button class="send-btn" id="comment-send">${t("Envoyer")}</button>
     </div>
   `;
 }
@@ -2808,7 +3055,7 @@ function bindPostDetailSheet(){
     savePostEditBtn.addEventListener("click", async (e)=>{
       const btn = e.currentTarget;
       const caption = document.getElementById("edit-caption-input").value.trim();
-      btn.disabled = true; btn.textContent = "Enregistrement…";
+      btn.disabled = true; btn.textContent = t("Enregistrement…");
       await editPost(activeModalPostId, { caption: caption || "…" });
       if(editPostNewPhoto){
         const photoRowId = post.photos[0] ? post.photos[0].id : null;
@@ -2818,18 +3065,18 @@ function bindPostDetailSheet(){
       postEditMode = false; editPostNewPhoto = null;
       renderOverlay();
       renderGroupContentOnly();
-      showToast("Photo mise à jour ✅");
+      showToast(t("Photo mise à jour ✅"));
     });
   }
   const deletePostBtn = document.getElementById("delete-post-btn");
   if(deletePostBtn){
     deletePostBtn.addEventListener("click", async ()=>{
-      if(!confirm("Supprimer définitivement cette photo, avec ses commentaires et réactions ?")) return;
+      if(!confirm(t("Supprimer définitivement cette photo, avec ses commentaires et réactions ?"))) return;
       await deletePost(activeModalPostId);
       await loadGroupPosts(group.id);
       closeOverlay();
       renderGroupContentOnly();
-      showToast("Photo supprimée");
+      showToast(t("Photo supprimée"));
     });
   }
 
@@ -2914,7 +3161,7 @@ document.getElementById("edit-photo-file").addEventListener("change", async (e)=
   editPostNewPhoto = await compressImage(file);
   pendingEditPostId = null;
   if(modalType === "postDetail"){ renderOverlay(); }
-  showToast("Nouvelle photo prête — clique \"Enregistrer\" pour valider");
+  showToast(t("Nouvelle photo prête — clique \"Enregistrer\" pour valider"));
 });
 document.getElementById("reply-file").addEventListener("change", async (e)=>{
   const file = e.target.files[0];
@@ -2926,7 +3173,7 @@ document.getElementById("reply-file").addEventListener("change", async (e)=>{
   await loadGroupPosts(group.id);
   e.target.value = "";
   renderOverlay();
-  showToast("Photo ajoutée en réponse 📸");
+  showToast(t("Photo ajoutée en réponse 📸"));
 });
 document.getElementById("avatar-file").addEventListener("change", async (e)=>{
   const file = e.target.files[0];
@@ -2947,7 +3194,7 @@ function renderAddPostSheet(){
   const members = (memberProfilesCache[activeGroupId] || []).filter(m => m.id !== currentUser.id);
   return `
     <div class="sheet-head">
-      <h4>Nouveau moment</h4>
+      <h4>${t("Nouveau moment")}</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
@@ -2960,25 +3207,25 @@ function renderAddPostSheet(){
           </div>
         `).join("")}
         <div class="photo-thumb-add" id="add-photo-zone">
-          <span>${icon("camera",20)}</span><span style="font-size:10.5px;">${newPostPhotos.length ? "Ajouter" : "Choisir"}</span>
+          <span>${icon("camera",20)}</span><span style="font-size:10.5px;">${newPostPhotos.length ? t("Ajouter") : t("Choisir")}</span>
         </div>
       </div>
-      ${newPostPhotos.length ? `<p class="helper-text" style="margin:0 18px 6px;">Appuie sur une photo pour ajuster son cadrage.</p>` : ""}
+      ${newPostPhotos.length ? `<p class="helper-text" style="margin:0 18px 6px;">${t("Appuie sur une photo pour ajuster son cadrage.")}</p>` : ""}
       <div class="form-block">
         <div class="field">
-          <label>Légende</label>
-          <input type="text" id="post-caption" placeholder="Raconte ce moment…" />
+          <label>${t("Légende")}</label>
+          <input type="text" id="post-caption" placeholder="${t("Raconte ce moment…")}" />
         </div>
         <div class="field">
-          <label>Lieu (facultatif)</label>
+          <label>${t("Lieu (facultatif)")}</label>
           <div style="display:flex; gap:8px;">
-            <input type="text" id="post-location" placeholder="ex. Annecy, France" value="${escapeHtml(newPostLocation)}" style="flex:1;" />
-            <button class="icon-btn" style="background:var(--paper-dim); color:var(--pine); border-radius:10px; width:44px;" id="use-location-btn" title="Utiliser ma position">${icon("pin",16)}</button>
+            <input type="text" id="post-location" placeholder="${t("ex. Annecy, France")}" value="${escapeHtml(newPostLocation)}" style="flex:1;" />
+            <button class="icon-btn" style="background:var(--paper-dim); color:var(--pine); border-radius:10px; width:44px;" id="use-location-btn" title="${t("Utiliser ma position")}">${icon("pin",16)}</button>
           </div>
         </div>
         ${members.length ? `
           <div class="field">
-            <label>Taguer des personnes (facultatif)</label>
+            <label>${t("Taguer des personnes (facultatif)")}</label>
             <div class="tag-people-list">
               ${members.map(m => `
                 <label class="tag-person-row">
@@ -2991,9 +3238,9 @@ function renderAddPostSheet(){
           </div>
         ` : ""}
         <label class="checkbox-row">
-          <input type="checkbox" id="post-favorite" ${newPostFavorite?'checked':''}/> ⭐ Ajouter à la sélection du livre de l'année
+          <input type="checkbox" id="post-favorite" ${newPostFavorite?'checked':''}/> ⭐ ${t("Ajouter à la sélection du livre de l'année")}
         </label>
-        <button class="btn-primary" id="publish-post" ${newPostPhotos.length ? "" : "disabled"}>Publier</button>
+        <button class="btn-primary" id="publish-post" ${newPostPhotos.length ? "" : "disabled"}>${t("Publier")}</button>
       </div>
     </div>
   `;
@@ -3023,19 +3270,19 @@ function bindAddPostSheet(){
   locationInput.addEventListener("input", ()=>{ newPostLocation = locationInput.value; });
   document.getElementById("use-location-btn").addEventListener("click", async (e)=>{
     const btn = e.currentTarget;
-    if(!navigator.geolocation){ showToast("Localisation non disponible sur cet appareil."); return; }
+    if(!navigator.geolocation){ showToast(t("Localisation non disponible sur cet appareil.")); return; }
     btn.textContent = "…";
     navigator.geolocation.getCurrentPosition(async (pos)=>{
       try{
         const { latitude, longitude } = pos.coords;
-        const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=fr`);
+        const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=${lang()}`);
         const data = await res.json();
         const place = [data.city || data.locality, data.countryName].filter(Boolean).join(", ");
         newPostLocation = place || `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
-      }catch(e){ showToast("Impossible de récupérer le lieu."); }
+      }catch(e){ showToast(t("Impossible de récupérer le lieu.")); }
       btn.innerHTML = icon("pin",16);
       renderOverlay();
-    }, ()=>{ btn.innerHTML = icon("pin",16); showToast("Localisation refusée ou indisponible."); }, { timeout: 8000 });
+    }, ()=>{ btn.innerHTML = icon("pin",16); showToast(t("Localisation refusée ou indisponible.")); }, { timeout: 8000 });
   });
   document.querySelectorAll(".tag-person-checkbox").forEach(cb=>{
     cb.addEventListener("change", ()=>{
@@ -3048,7 +3295,7 @@ function bindAddPostSheet(){
     const btn = e.currentTarget;
     if(btn.disabled) return; // guard against double-tap submitting twice
     btn.disabled = true;
-    btn.textContent = "Publication…";
+    btn.textContent = t("Publication…");
     const caption = document.getElementById("post-caption").value.trim();
     const group = getGroup(activeGroupId);
     const post = {
@@ -3061,7 +3308,7 @@ function bindAddPostSheet(){
     updateAppBadge();
     closeOverlay();
     renderGroupContentOnly();
-    showToast("Photo publiée 🎉");
+    showToast(t("Photo publiée 🎉"));
   });
 }
 document.getElementById("hidden-file").addEventListener("change", async (e)=>{
@@ -3076,7 +3323,7 @@ document.getElementById("hidden-file").addEventListener("change", async (e)=>{
     }
   }catch(err){
     console.error("photo upload error", err);
-    showToast("⚠️ Erreur lors du chargement : " + (err && err.message ? err.message : "inconnue"));
+    showToast((lang()==="en" ? "⚠️ Error while loading: " : "⚠️ Erreur lors du chargement : ") + (err && err.message ? err.message : (lang()==="en" ? "unknown" : "inconnue")));
   }
   e.target.value = "";
   if(modalType === "addPost"){ renderOverlay(); }
@@ -3089,16 +3336,16 @@ function renderInviteSheet(){
   const group = getGroup(activeGroupId);
   return `
     <div class="sheet-head">
-      <h4>Inviter dans ${escapeHtml(group.name)}</h4>
+      <h4>${t("Inviter dans")} ${escapeHtml(group.name)}</h4>
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
-      <p style="padding:16px 18px 0; font-size:13.5px; color:var(--ink-soft); line-height:1.5;">Le plus simple : envoie le lien ci-dessous par SMS ou WhatsApp. Tes amis appuient dessus, créent leur compte, et rejoignent le groupe automatiquement — sans rien taper.</p>
+      <p style="padding:16px 18px 0; font-size:13.5px; color:var(--ink-soft); line-height:1.5;">${t("Le plus simple : envoie le lien ci-dessous par SMS ou WhatsApp. Tes amis appuient dessus, créent leur compte, et rejoignent le groupe automatiquement — sans rien taper.")}</p>
       <div class="form-block" style="padding-top:16px;">
-        <button class="btn-primary" id="share-link">${icon("link",15)} Partager le lien d'invitation</button>
-        <p class="section-label" style="margin-top:22px;">Ou avec le code</p>
+        <button class="btn-primary" id="share-link">${icon("link",15)} ${t("Partager le lien d'invitation")}</button>
+        <p class="section-label" style="margin-top:22px;">${t("Ou avec le code")}</p>
         <div class="invite-code" style="margin:0; padding:16px;">${group.joinCode}</div>
-        <button class="btn-secondary" id="copy-code" style="margin-top:10px;">Copier juste le code</button>
+        <button class="btn-secondary" id="copy-code" style="margin-top:10px;">${t("Copier juste le code")}</button>
       </div>
     </div>
   `;
@@ -3109,15 +3356,15 @@ function bindInviteSheet(){
   document.getElementById("share-link").addEventListener("click", async ()=>{
     const link = inviteLink(group);
     if(navigator.share){
-      try{ await navigator.share({ title: "Rejoins " + group.name + " sur A Wyle", url: link }); }
+      try{ await navigator.share({ title: t("Rejoins") + " " + group.name + " " + t("sur A Wyle"), url: link }); }
       catch(e){ /* user cancelled share, no-op */ }
     } else {
-      try{ await navigator.clipboard.writeText(link); showToast("Lien copié !"); }
+      try{ await navigator.clipboard.writeText(link); showToast(t("Lien copié !")); }
       catch(e){ showToast("Lien : " + link); }
     }
   });
   document.getElementById("copy-code").addEventListener("click", async ()=>{
-    try{ await navigator.clipboard.writeText(group.joinCode); showToast("Code copié !"); }
+    try{ await navigator.clipboard.writeText(group.joinCode); showToast(t("Code copié !")); }
     catch(e){ showToast("Code : " + group.joinCode); }
   });
 }

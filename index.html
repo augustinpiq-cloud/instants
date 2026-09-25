@@ -64,6 +64,12 @@
     background:linear-gradient(100deg, var(--pine-deep), var(--gold) 65%, var(--rose));
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
+  .brand-title-lg{ font-size:48px; }
+  .header-brand-title{
+    font-family:'Poppins', sans-serif; font-weight:800;
+    background:linear-gradient(100deg, var(--pine-deep), var(--gold) 65%, var(--rose));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
   .brand-sub{ font-family:'Inter', sans-serif; font-size:11.5px; letter-spacing:0.6px; text-transform:uppercase; color:var(--ink-soft); }
   .spinner{
     width:26px;height:26px;border-radius:50%;
@@ -255,6 +261,12 @@
   .profile-list{ display:flex; flex-direction:column; gap:8px; margin-top:8px; }
   .list-row{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; cursor:pointer; font-size:14px; }
   .list-row.danger{ color:var(--danger); }
+  .lang-select{ position:relative; display:inline-block; margin:0 0 18px; }
+  .lang-select-btn{ all:unset; display:flex; align-items:center; gap:7px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:9px 13px; cursor:pointer; font-size:19px; line-height:1; }
+  .lang-select-caret{ font-size:11px; color:var(--ink-soft); }
+  .lang-select-menu{ position:absolute; top:calc(100% + 6px); left:0; background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 6px 18px rgba(31,51,41,0.14); overflow:hidden; z-index:20; min-width:150px; }
+  .lang-select-option{ all:unset; display:flex; align-items:center; gap:9px; width:100%; box-sizing:border-box; padding:11px 14px; cursor:pointer; font-size:14px; color:var(--ink); }
+  .lang-select-option:hover{ background:var(--paper-dim); }
   .my-photos-grid{
     display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-top:4px;
   }
@@ -682,7 +694,7 @@ function dow(){ return lang() === "en" ? DOW_EN : DOW_FR; }
 function dateLocale(){ return lang() === "en" ? "en-GB" : "fr-FR"; }
 
 const I18N_EN = {
-  "Nos instants de vie": "Our life's moments",
+  "Partage de nos bons moments": "Sharing our best moments",
   "Le carnet du groupe": "The group's photo book",
   "Choisis un nouveau mot de passe": "Choose a new password",
   "Se connecter": "Log in",
@@ -710,12 +722,12 @@ const I18N_EN = {
   "Langue": "Language",
   "Français": "French",
   "Anglais": "English",
-  "Mes carnets": "My books",
+  "Mes groupes": "My groups",
   "Tu n'as pas encore de carnet.": "You don't have a book yet.",
   "Crée un groupe ou rejoins celui de tes amis avec leur code.": "Create a group or join your friends' with their code.",
   "+ Créer un groupe": "+ Create a group",
   "Rejoindre avec un code": "Join with a code",
-  "Carnets": "Books",
+  "Accueil": "Home",
   "Profil": "Profile",
   "Mon profil": "My profile",
   "Modifier mon profil": "Edit my profile",
@@ -1411,8 +1423,8 @@ function renderLoading(){
     <div class="center-screen">
       <div class="brand-block">
         <span class="brand-mark"></span>
-        <h1 class="brand-title">A Wyle</h1>
-        <span class="brand-sub">${t("Nos instants de vie")}</span>
+        <h1 class="brand-title brand-title-lg">A Wyle</h1>
+        <span class="brand-sub">${t("Partage de nos bons moments")}</span>
       </div>
       <div class="spinner"></div>
     </div>
@@ -1674,7 +1686,7 @@ function renderHomeScreen(){
   const groups = myGroups();
   return `
     <div class="app-header">
-      <h2>${t("Mes carnets")}</h2>
+      <h2 class="header-brand-title">A Wyle</h2>
       <span class="header-avatar" id="header-avatar" style="${currentUser.avatarPhoto ? 'padding:0;overflow:hidden;' : 'background:'+currentUser.avatarColor}">${currentUser.avatarPhoto ? `<img src="${currentUser.avatarPhoto}" alt="" style="width:100%;height:100%;object-fit:cover;"/>` : currentUser.displayName[0].toUpperCase()}</span>
     </div>
     <div class="screen">
@@ -1686,6 +1698,7 @@ function renderHomeScreen(){
             ${t("Tu n'as pas encore de carnet.")}<br/>${t("Crée un groupe ou rejoins celui de tes amis avec leur code.")}
           </div>
         ` : `
+          <p class="section-label">${t("Mes groupes")}</p>
           ${groups.map(g => {
             const posts = postsCache[g.id] || [];
             const last = [...posts].sort((a,b)=> b.date.localeCompare(a.date))[0];
@@ -1705,7 +1718,7 @@ function renderHomeScreen(){
         `}
         <div class="home-actions">
           <button class="btn-primary" id="go-create-group">${t("+ Créer un groupe")}</button>
-          <button class="btn-secondary" id="go-join-group">${icon("key",15)} ${t("Rejoindre avec un code")}</button>
+          <button class="btn-secondary" id="go-join-group">🔒 ${t("Rejoindre avec un code")}</button>
         </div>
       </div>
     </div>
@@ -1737,7 +1750,7 @@ function renderBottomNav(active){
   const profileIcon = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 19.5a7.2 7.2 0 0 1 14.4 0"/></svg>`;
   return `
     <div class="bottom-nav">
-      <button class="nav-btn ${active==='home'?'active':''}" data-nav="home">${homeIcon}${t("Carnets")}</button>
+      <button class="nav-btn ${active==='home'?'active':''}" data-nav="home">${homeIcon}${t("Accueil")}</button>
       <button class="nav-btn ${active==='profile'?'active':''}" data-nav="profile">${profileIcon}${t("Profil")}</button>
     </div>
   `;
@@ -1806,7 +1819,9 @@ function bindMyPhotosSection(){
 }
 
 function renderProfileScreen(){
-  const groups = myGroups();
+  const flags = { fr: "🇫🇷", en: "🇬🇧" };
+  const names = { fr: "Français", en: "English" };
+  const otherLangs = Object.keys(flags).filter(l => l !== currentLang);
   return `
     <div class="app-header">
       <h2>${t("Mon profil")}</h2>
@@ -1819,21 +1834,19 @@ function renderProfileScreen(){
           <h3>${escapeHtml(currentUser.displayName)}</h3>
           <span class="uname">${currentUser.email}</span>
         </div>
-        <p class="section-label">${t("Langue")}</p>
-        <div class="auth-tabs" id="profile-lang-toggle" style="margin-bottom:18px;">
-          <button type="button" class="auth-tab ${currentLang==='fr'?'active':''}" data-profile-lang="fr">Français</button>
-          <button type="button" class="auth-tab ${currentLang==='en'?'active':''}" data-profile-lang="en">English</button>
-        </div>
-        <p class="section-label">${nGroups(groups.length)}</p>
         <div class="profile-list">
-          ${groups.map(g => `<div class="list-row" data-group="${g.id}"><span>${icon("book",16)}</span> ${escapeHtml(g.name)}</div>`).join("")}
-          <div class="list-row" id="edit-profile-btn" style="margin-top:14px;"><span>${icon("pencil",16)}</span> ${t("Modifier mon profil")}</div>
+          <div class="list-row" id="edit-profile-btn"><span>${icon("pencil",16)}</span> ${t("Modifier mon profil")}</div>
           <div class="list-row" id="push-toggle-btn"><span>${icon("bell",16)}</span> <span id="push-toggle-label">${t("Notifications")}</span></div>
-          <div class="list-row" id="fix-old-posts-btn"><span>${icon("wrench",16)}</span> ${t("Corriger mes anciennes publications")}</div>
           <div class="list-row" id="install-help-btn"><span>${icon("smartphone",16)}</span> ${t("Comment installer l'appli ?")}</div>
           <div class="list-row" id="logout-btn"><span>${icon("logout",16)}</span> <span class="danger" style="color:var(--danger)">${t("Se déconnecter")}</span></div>
         </div>
-        <p class="section-label" style="margin-top:26px;">${t("Mes photos")}</p>
+        <div class="lang-select" id="profile-lang-select" style="margin-top:26px;">
+          <button type="button" class="lang-select-btn" id="profile-lang-btn"><span>${flags[currentLang]}</span><span class="lang-select-caret">▾</span></button>
+          <div class="lang-select-menu" id="profile-lang-menu" hidden>
+            ${otherLangs.map(l => `<button type="button" class="lang-select-option" data-profile-lang="${l}"><span>${flags[l]}</span> ${names[l]}</button>`).join("")}
+          </div>
+        </div>
+        <p class="section-label">${t("Mes photos")}</p>
         <div id="my-photos-section">${renderMyPhotosSection()}</div>
       </div>
     </div>
@@ -1841,21 +1854,19 @@ function renderProfileScreen(){
   `;
 }
 function bindProfile(){
-  document.querySelectorAll(".profile-list [data-group]").forEach(row=>{
-    row.addEventListener("click", async ()=>{
-      activeGroupId = row.dataset.group;
-      activeView = "fil";
-      screen = "group";
-      render();
-      if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
-      await markGroupSeen(activeGroupId);
-      updateAppBadge();
-    });
-  });
   document.getElementById("edit-profile-btn").addEventListener("click", ()=>{
     editProfilePhoto = undefined;
     modalType = "editProfile"; renderOverlay(); openOverlay();
   });
+  const langBtn = document.getElementById("profile-lang-btn");
+  const langMenu = document.getElementById("profile-lang-menu");
+  if(langBtn && langMenu){
+    langBtn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      langMenu.hidden = !langMenu.hidden;
+    });
+    document.addEventListener("click", ()=>{ langMenu.hidden = true; }, { once:true });
+  }
   document.querySelectorAll("[data-profile-lang]").forEach(btn=>{
     btn.addEventListener("click", async ()=>{
       const newLang = btn.dataset.profileLang;
@@ -1882,15 +1893,6 @@ function bindProfile(){
       pushLabel.textContent = sub ? t("Notifications activées ✅ (toucher pour désactiver)") : t("Activer les notifications");
     });
   }
-  document.getElementById("fix-old-posts-btn").addEventListener("click", async (e)=>{
-    const btn = e.currentTarget;
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = `<span>⏳</span> ${t("Correction en cours…")}`;
-    await syncAuthorInfoEverywhere(currentUser.id, currentUser.displayName, currentUser.avatarColor, currentUser.avatarPhoto);
-    postsCache = {};
-    btn.innerHTML = originalHtml;
-    showToast(t("Anciennes publications corrigées ✅"));
-  });
   document.getElementById("install-help-btn").addEventListener("click", ()=>{
     modalType = "installHelp"; renderOverlay(); openOverlay();
   });

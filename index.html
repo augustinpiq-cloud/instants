@@ -64,11 +64,10 @@
     background:linear-gradient(100deg, var(--pine-deep), var(--gold) 65%, var(--rose));
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
-  .brand-title-lg{ font-size:48px; }
+  .brand-title-lg{ font-size:58px; }
   .header-brand-title{
     font-family:'Poppins', sans-serif; font-weight:800;
-    background:linear-gradient(100deg, var(--pine-deep), var(--gold) 65%, var(--rose));
-    -webkit-background-clip:text; background-clip:text; color:transparent;
+    color:#fff;
   }
   .brand-sub{ font-family:'Inter', sans-serif; font-size:11.5px; letter-spacing:0.6px; text-transform:uppercase; color:var(--ink-soft); }
   .spinner{
@@ -694,7 +693,7 @@ function dow(){ return lang() === "en" ? DOW_EN : DOW_FR; }
 function dateLocale(){ return lang() === "en" ? "en-GB" : "fr-FR"; }
 
 const I18N_EN = {
-  "Partage de nos bons moments": "Sharing our best moments",
+  "Partage de bons moments": "Sharing good moments",
   "Le carnet du groupe": "The group's photo book",
   "Choisis un nouveau mot de passe": "Choose a new password",
   "Se connecter": "Log in",
@@ -1424,7 +1423,7 @@ function renderLoading(){
       <div class="brand-block">
         <span class="brand-mark"></span>
         <h1 class="brand-title brand-title-lg">A Wyle</h1>
-        <span class="brand-sub">${t("Partage de nos bons moments")}</span>
+        <span class="brand-sub">${t("Partage de bons moments")}</span>
       </div>
       <div class="spinner"></div>
     </div>

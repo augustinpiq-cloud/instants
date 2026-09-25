@@ -1,4 +1,4 @@
-// Moments — service worker
+// A Wyle — service worker
 // Receives push notifications sent by the notify-new-post Edge Function
 // and shows them even when the app isn't open.
 
@@ -10,14 +10,14 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  let data = { title: "Moments", body: "Nouveau moment partagé." };
+  let data = { title: "A Wyle", body: "Nouveau moment partagé." };
   try {
     if (event.data) data = event.data.json();
   } catch (e) {
     if (event.data) data.body = event.data.text();
   }
 
-  const title = data.title || "Moments";
+  const title = data.title || "A Wyle";
   const options = {
     body: data.body || "",
     icon: "./icon-192.png",

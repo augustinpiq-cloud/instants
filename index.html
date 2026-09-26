@@ -693,7 +693,7 @@ function dow(){ return lang() === "en" ? DOW_EN : DOW_FR; }
 function dateLocale(){ return lang() === "en" ? "en-GB" : "fr-FR"; }
 
 const I18N_EN = {
-  "Partage de bons moments": "Sharing good moments",
+  "Rester connecté en se déconnectant": "Stay connected by disconnecting",
   "Le carnet du groupe": "The group's photo book",
   "Choisis un nouveau mot de passe": "Choose a new password",
   "Se connecter": "Log in",
@@ -1423,7 +1423,7 @@ function renderLoading(){
       <div class="brand-block">
         <span class="brand-mark"></span>
         <h1 class="brand-title brand-title-lg">A Wyle</h1>
-        <span class="brand-sub">${t("Partage de bons moments")}</span>
+        <span class="brand-sub">${t("Rester connecté en se déconnectant")}</span>
       </div>
       <div class="spinner"></div>
     </div>
@@ -1685,7 +1685,7 @@ function renderHomeScreen(){
   const groups = myGroups();
   return `
     <div class="app-header">
-      <h2 class="header-brand-title">A Wyle</h2>
+      <h2 class="header-brand-title">${t("Mes groupes")}</h2>
       <span class="header-avatar" id="header-avatar" style="${currentUser.avatarPhoto ? 'padding:0;overflow:hidden;' : 'background:'+currentUser.avatarColor}">${currentUser.avatarPhoto ? `<img src="${currentUser.avatarPhoto}" alt="" style="width:100%;height:100%;object-fit:cover;"/>` : currentUser.displayName[0].toUpperCase()}</span>
     </div>
     <div class="screen">
@@ -1697,7 +1697,6 @@ function renderHomeScreen(){
             ${t("Tu n'as pas encore de carnet.")}<br/>${t("Crée un groupe ou rejoins celui de tes amis avec leur code.")}
           </div>
         ` : `
-          <p class="section-label">${t("Mes groupes")}</p>
           ${groups.map(g => {
             const posts = postsCache[g.id] || [];
             const last = [...posts].sort((a,b)=> b.date.localeCompare(a.date))[0];

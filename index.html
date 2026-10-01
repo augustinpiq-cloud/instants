@@ -775,8 +775,8 @@ const I18N_EN = {
   "Aucune photo sélectionnée pour l'instant.": "No photos selected yet.",
   "Ouvre une photo dans le fil pour la marquer.": "Open a photo in the feed to mark it.",
   "Commander le livre": "Order the book",
+  "Cette fonctionnalité est en cours de développement 🚧": "This feature is under development 🚧",
   "Fil actualisé": "Feed refreshed",
-  "Commande envoyée — le livre sera imprimé et posté à chaque membre 📖": "Order sent — the book will be printed and mailed to every member 📖",
   "Le lien d'invitation n'est plus valide.": "This invite link is no longer valid.",
   "Ajuster le cadrage": "Adjust the framing",
   "Aperçu dans le fil": "Preview in the feed",
@@ -2104,7 +2104,6 @@ function renderFeed(group, posts){
               <div class="post-foot">
                 ${Object.entries(reactionCounts(p)).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
                 <span>${icon("comment",14)} ${p.comments.length}</span>
-                ${p.favorite ? `<span>⭐ ${t("dans le livre")}</span>` : ""}
               </div>
             </div>
           </article>
@@ -2279,7 +2278,6 @@ function renderDayView(group, posts, dateStr){
               <div class="post-foot">
                 ${Object.entries(reactionCounts(p)).map(([e,c])=>`<span class="reaction-chip">${e} ${c}</span>`).join("")}
                 <span>${icon("comment",14)} ${p.comments.length}</span>
-                ${p.favorite ? `<span>⭐ ${t("dans le livre")}</span>` : ""}
               </div>
             </div>
           </article>
@@ -2396,7 +2394,7 @@ function attachContentHandlers(){
     el.addEventListener("click", ()=> openStoryViewer(Number(el.dataset.monthIndex), 0));
   });
   const orderBtn = document.getElementById("order-book");
-  if(orderBtn){ orderBtn.addEventListener("click", ()=> showToast(t("Commande envoyée — le livre sera imprimé et posté à chaque membre 📖"))); }
+  if(orderBtn){ orderBtn.addEventListener("click", ()=> showToast(t("Cette fonctionnalité est en cours de développement 🚧"))); }
 
   // Calendar: month grid navigation
   const prevMonthBtn = document.getElementById("cal-prev-month");

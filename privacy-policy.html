@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Wyle — Politique de confidentialité</title>
+<style>
+  :root{
+    --ink:#1E2A22; --ink-soft:#4B564C;
+    --paper:#F6F1E4; --paper-dim:#EEE7D4;
+    --pine:#1F3329; --pine-deep:#182720;
+    --gold:#C9A24C; --rose:#A66B63;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    background:var(--paper); color:var(--ink); line-height:1.6;
+  }
+  header{
+    background:linear-gradient(120deg, var(--pine-deep), var(--pine));
+    color:#fff; padding:48px 24px 36px; text-align:center;
+  }
+  header h1{
+    font-family:'Poppins',sans-serif; font-weight:800; margin:0 0 6px;
+    background:linear-gradient(100deg, #fff, var(--gold) 65%, var(--rose));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    font-size:32px;
+  }
+  header p{ margin:0; opacity:0.85; font-size:14px; }
+  main{ max-width:680px; margin:0 auto; padding:32px 24px 80px; }
+  h2{ font-family:'Poppins',sans-serif; font-size:19px; color:var(--pine); margin:36px 0 10px; }
+  p, li{ font-size:15px; color:var(--ink); }
+  .updated{ color:var(--ink-soft); font-size:13px; margin-bottom:28px; }
+  ul{ padding-left:20px; }
+  .lang-toggle{ text-align:center; margin:20px 0 0; }
+  .lang-toggle button{
+    all:unset; cursor:pointer; padding:8px 16px; border-radius:10px; font-size:13px; font-weight:600;
+    color:#fff; opacity:0.7; margin:0 4px;
+  }
+  .lang-toggle button.active{ opacity:1; background:rgba(255,255,255,0.15); }
+  section{ display:none; }
+  section.active{ display:block; }
+  footer{ text-align:center; color:var(--ink-soft); font-size:13px; padding:20px; }
+  a{ color:var(--rose); }
+</style>
+</head>
+<body>
+<header>
+  <h1>A Wyle</h1>
+  <p>Politique de confidentialité / Privacy Policy</p>
+  <div class="lang-toggle">
+    <button id="btn-fr" class="active">Français</button>
+    <button id="btn-en">English</button>
+  </div>
+</header>
+<main>
+  <section id="fr" class="active">
+    <p class="updated">Dernière mise à jour : 27 septembre 2026</p>
+
+    <p>A Wyle est une application privée de partage de photos entre proches,
+    organisée en groupes ("carnets"). Cette page explique quelles données
+    sont collectées et comment elles sont utilisées.</p>
+
+    <h2>Données que nous collectons</h2>
+    <ul>
+      <li><strong>Compte</strong> : adresse email et mot de passe (géré de
+      façon sécurisée par notre prestataire d'authentification, jamais
+      stocké en clair).</li>
+      <li><strong>Profil</strong> : nom affiché, couleur ou photo d'avatar,
+      langue préférée.</li>
+      <li><strong>Contenu</strong> : les photos que tu publies, les
+      légendes, commentaires, réactions, lieux et personnes taguées que tu
+      ajoutes volontairement.</li>
+      <li><strong>Groupes</strong> : les carnets que tu crées ou rejoins, et
+      la liste de leurs membres.</li>
+      <li><strong>Notifications</strong> : si tu actives les notifications,
+      un identifiant technique d'abonnement push est conservé pour te
+      prévenir des nouvelles publications.</li>
+    </ul>
+
+    <h2>Pourquoi ces données</h2>
+    <p>Ces données servent uniquement à faire fonctionner l'application :
+    t'identifier, afficher les photos aux bonnes personnes (uniquement les
+    membres de tes groupes), et t'envoyer des notifications si tu les as
+    activées. Nous n'utilisons aucune donnée à des fins publicitaires.</p>
+
+    <h2>Partage des données</h2>
+    <p>Tes données ne sont jamais vendues ni partagées avec des tiers à des
+    fins commerciales. Elles sont hébergées chez notre prestataire technique
+    (Supabase), qui agit uniquement comme sous-traitant technique pour
+    stocker les données de façon sécurisée.</p>
+
+    <p>Au sein d'un groupe, les photos et informations que tu publies sont
+    visibles par les autres membres de ce groupe uniquement.</p>
+
+    <h2>Conservation et suppression</h2>
+    <p>Tes données sont conservées tant que ton compte est actif. Tu peux à
+    tout moment demander la suppression de ton compte et de toutes les
+    données associées en nous contactant à l'adresse ci-dessous.</p>
+
+    <h2>Sécurité</h2>
+    <p>L'accès aux photos et contenus est protégé : seuls les membres d'un
+    groupe peuvent voir son contenu, grâce à des règles de sécurité
+    appliquées directement au niveau de la base de données.</p>
+
+    <h2>Modifications</h2>
+    <p>Cette politique peut être mise à jour occasionnellement. La date de
+    dernière mise à jour est indiquée en haut de cette page.</p>
+
+    <h2>Contact</h2>
+    <p>Pour toute question ou demande (y compris la suppression de tes
+    données), contacte :
+    <a href="mailto:augustin.piq@gmail.com">augustin.piq@gmail.com</a></p>
+  </section>
+
+  <section id="en">
+    <p class="updated">Last updated: September 27, 2026</p>
+
+    <p>A Wyle is a private photo-sharing app for close friends and family,
+    organized into groups ("carnets"). This page explains what data is
+    collected and how it is used.</p>
+
+    <h2>Data we collect</h2>
+    <ul>
+      <li><strong>Account</strong>: email address and password (securely
+      managed by our authentication provider, never stored in plain
+      text).</li>
+      <li><strong>Profile</strong>: display name, avatar color or photo,
+      preferred language.</li>
+      <li><strong>Content</strong>: photos you post, captions, comments,
+      reactions, locations and tagged people you voluntarily add.</li>
+      <li><strong>Groups</strong>: the groups you create or join, and their
+      member list.</li>
+      <li><strong>Notifications</strong>: if you enable notifications, a
+      technical push-subscription identifier is kept so we can notify you
+      of new posts.</li>
+    </ul>
+
+    <h2>Why we collect it</h2>
+    <p>This data is used solely to run the app: identify you, show photos
+    to the right people (only members of your groups), and send
+    notifications if you enabled them. We do not use any data for
+    advertising purposes.</p>
+
+    <h2>Data sharing</h2>
+    <p>Your data is never sold or shared with third parties for commercial
+    purposes. It is hosted with our technical provider (Supabase), which
+    acts only as a technical subprocessor to store data securely.</p>
+
+    <p>Within a group, the photos and information you post are visible only
+    to the other members of that group.</p>
+
+    <h2>Retention and deletion</h2>
+    <p>Your data is kept as long as your account is active. You may request
+    deletion of your account and all associated data at any time by
+    contacting us at the address below.</p>
+
+    <h2>Security</h2>
+    <p>Access to photos and content is protected: only members of a group
+    can see its content, enforced through security rules applied directly
+    at the database level.</p>
+
+    <h2>Changes</h2>
+    <p>This policy may be updated occasionally. The last-updated date is
+    shown at the top of this page.</p>
+
+    <h2>Contact</h2>
+    <p>For any question or request (including data deletion), contact:
+    <a href="mailto:augustin.piq@gmail.com">augustin.piq@gmail.com</a></p>
+  </section>
+</main>
+<footer>A Wyle</footer>
+<script>
+  const btnFr = document.getElementById('btn-fr');
+  const btnEn = document.getElementById('btn-en');
+  const secFr = document.getElementById('fr');
+  const secEn = document.getElementById('en');
+  btnFr.addEventListener('click', ()=>{
+    btnFr.classList.add('active'); btnEn.classList.remove('active');
+    secFr.classList.add('active'); secEn.classList.remove('active');
+  });
+  btnEn.addEventListener('click', ()=>{
+    btnEn.classList.add('active'); btnFr.classList.remove('active');
+    secEn.classList.add('active'); secFr.classList.remove('active');
+  });
+</script>
+</body>
+</html>

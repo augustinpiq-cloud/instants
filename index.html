@@ -517,6 +517,10 @@
   .modal-sheet.full{ max-width:none; height:100%; max-height:100%; border-radius:0; padding-top:env(safe-area-inset-top); }
   .bd-month{ font-family:'Poppins',sans-serif; font-size:14px; font-weight:600; margin:18px 4px 6px; color:var(--pine); text-transform:capitalize; }
   .bd-line{ display:flex; align-items:center; gap:12px; padding:7px 4px; border-bottom:1px solid var(--line); font-size:14.5px; }
+  .tag-person-row.bd-radio{ display:inline-flex; flex-direction:row; align-items:center; gap:8px; white-space:nowrap; }
+  .tag-person-row.bd-radio input{ flex-shrink:0; width:auto; padding:0; margin:0; }
+  .tag-person-row.bd-radio span{ text-align:left; }
+  .bd-av{ width:28px; height:28px; border-radius:50%; object-fit:cover; flex-shrink:0; }
   .bd-line .bd-d{ width:26px; font-weight:600; color:var(--ink-soft); text-align:right; flex-shrink:0; }
   .bd-line .bd-n{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .bd-line.is-today .bd-n, .bd-line.is-today .bd-d{ color:var(--pine); font-weight:700; }
@@ -693,6 +697,7 @@ let memberProfilesCache = {}; // groupId -> [{id, displayName, avatarColor, avat
 let newPostTaggedIds = [];    // selected member ids to tag on a new post
 let newPostPhotos = [];       // multiple compressed photo dataURLs for a new post
 let newPostLocation = "";
+let newPostDate = "";
 let mentionActiveIndex = -1;  // for @mention keyboard navigation (reserved)
 let calendarMonthCursor = null; // {year, month} — which month the calendar is showing
 let calendarViewDate = null;    // 'YYYY-MM-DD' when viewing a single day's moments, else null
@@ -732,6 +737,9 @@ function dow(){ return lang() === "en" ? DOW_EN : DOW_FR; }
 function dateLocale(){ return lang() === "en" ? "en-GB" : "fr-FR"; }
 
 const I18N_EN = {
+  "demain": "tomorrow",
+  "Recadrer": "Crop",
+  "Aperçu": "Preview",
   "Anniversaires": "Birthdays",
   "anniversaire": "birthday",
   "Anniversaires du groupe": "Group birthdays",
@@ -1088,7 +1096,8 @@ async function syncAuthorInfoEverywhere(userId, displayName, avatarColor, avatar
     await Promise.all([
       sb.from("posts").update({ author_name: displayName, author_avatar_color: avatarColor, author_avatar_photo: avatarPhoto }).eq("author_id", userId),
       sb.from("comments").update({ author_name: displayName }).eq("author_id", userId),
-      sb.from("replies").update({ author_name: displayName }).eq("author_id", userId)
+      sb.from("replies").update({ author_name: displayName }).eq("author_id", userId),
+      sb.from("birthday_stories").update({ author_name: displayName, author_avatar_color: avatarColor, author_avatar_photo: avatarPhoto }).eq("author_id", userId)
     ]);
   }catch(e){ console.error("syncAuthorInfoEverywhere error", e); }
 }
@@ -2044,6 +2053,7 @@ function bindHome(){
       screen = "group";
       render();
       if(!postsCache[activeGroupId]){ await loadGroupPosts(activeGroupId); render(); }
+      else { const gid = activeGroupId; loadGroupBirthdays(gid).then(()=>{ if(screen === "group" && activeGroupId === gid && modalType === null){ renderGroupContentOnly(); renderHeaderDot(); } }); }
       await markGroupSeen(activeGroupId);
       updateAppBadge();
     });
@@ -2674,12 +2684,67 @@ function renderBirthdaysView(group){
           return `
             <div class="bd-line ${isBirthdayToday(p) ? "is-today" : ""}">
               <span class="bd-d">${p.day}</span>
-              <span class="bd-n">${escapeHtml(birthdayFullName(p))}${isBirthdayToday(p) ? " 🎂" : ""}</span>
+              ${p.photo ? `<img class="bd-av" src="${p.photo}" alt=""/>` : avatarHtml(p.firstName, p.color, null, "width:28px;height:28px;font-size:12px;flex-shrink:0;")}
+              <span class="bd-n">${escapeHtml(birthdayFullName(p))}${isBirthdayToday(p) ? " 🎂" : ""}${daysUntilBirthday(p.day, p.month) === 1 ? ` <span style="font-weight:400;color:var(--ink-soft);">(${t("demain")})</span>` : ""}</span>
               ${canDelete ? `<button class="bd-del" data-bd-del="${p.entryId}" title="${t("Supprimer")}">✕</button>` : ""}
             </div>`;
         }).join("")}`;
     }).join("")}
   `;
+}
+function bakeSquareCrop(dataUrl, fx, fy, size){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) * fx / 100, sy = (img.height - side) * fy / 100;
+      const c = document.createElement("canvas"); c.width = size; c.height = size;
+      c.getContext("2d").drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      resolve(c.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = ()=> resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+function renderAdjustBdPhotoSheet(){
+  return `
+    <div class="sheet-head">
+      <h4>${t("Ajuster le cadrage")}</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      <p class="section-label" style="padding:14px 18px 0;">${t("Aperçu")}</p>
+      <div class="crop-preview" style="width:120px; height:120px; aspect-ratio:1; border-radius:50%; overflow:hidden; margin:10px auto 0;">
+        <img src="${newBd.photoSrc}" id="crop-preview-img" style="width:100%;height:100%;object-fit:cover;object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
+      </div>
+      <p class="section-label" style="padding:16px 18px 0;">${t("Appuie sur la photo pour choisir ce qui doit rester visible")}</p>
+      <div class="crop-full-wrap" id="crop-full-wrap">
+        <img src="${newBd.photoSrc}" id="crop-full-img" alt=""/>
+        <div class="crop-full-marker" id="crop-full-marker" style="left:${adjustFocusX}%; top:${adjustFocusY}%;"></div>
+      </div>
+      <div class="form-block" style="padding-top:16px;">
+        <button class="btn-primary" id="save-crop-btn">${t("Valider ce cadrage")}</button>
+      </div>
+    </div>
+  `;
+}
+function bindAdjustBdPhotoSheet(){
+  document.getElementById("close-sheet").addEventListener("click", ()=>{ modalType = "addBirthday"; renderOverlay(); });
+  const fullImg = document.getElementById("crop-full-img");
+  const marker = document.getElementById("crop-full-marker");
+  const previewImg = document.getElementById("crop-preview-img");
+  document.getElementById("crop-full-wrap").addEventListener("click", (e)=>{
+    const rect = fullImg.getBoundingClientRect();
+    adjustFocusX = Math.round(Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)));
+    adjustFocusY = Math.round(Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)));
+    marker.style.left = adjustFocusX + "%"; marker.style.top = adjustFocusY + "%";
+    previewImg.style.objectPosition = `${adjustFocusX}% ${adjustFocusY}%`;
+  });
+  document.getElementById("save-crop-btn").addEventListener("click", async ()=>{
+    newBd.fx = adjustFocusX; newBd.fy = adjustFocusY;
+    newBd.photo = await bakeSquareCrop(newBd.photoSrc, adjustFocusX, adjustFocusY, 400);
+    modalType = "addBirthday"; renderOverlay();
+  });
 }
 function renderAddBirthdaySheet(){
   const g = getGroup(activeGroupId);
@@ -2695,17 +2760,10 @@ function renderAddBirthdaySheet(){
       <div class="form-block" style="padding-top:16px;">
         <div id="bd-error"></div>
         <div class="field">
-          <label>${t("Date")}</label>
-          <div style="display:flex; gap:8px;">
-            <select id="bd-day">${dayOptions(newBd.day)}</select>
-            <select id="bd-month">${monthOptions(newBd.month)}</select>
-          </div>
-        </div>
-        <div class="field">
           <label>${t("Pour qui ?")}</label>
           <div class="tag-people-list">
-            <label class="tag-person-row"><input type="radio" name="bd-mode" value="member" ${newBd.mode==="member"?"checked":""}/> <span>${t("Un membre du groupe")}</span></label>
-            <label class="tag-person-row"><input type="radio" name="bd-mode" value="ext" ${newBd.mode==="ext"?"checked":""}/> <span>${t("Une personne hors du groupe")}</span></label>
+            <label class="tag-person-row bd-radio"><input type="radio" name="bd-mode" value="member" ${newBd.mode==="member"?"checked":""}/> <span>${t("Un membre du groupe")}</span></label>
+            <label class="tag-person-row bd-radio"><input type="radio" name="bd-mode" value="ext" ${newBd.mode==="ext"?"checked":""}/> <span>${t("Une personne hors du groupe")}</span></label>
           </div>
         </div>
         ${newBd.mode === "member" ? `
@@ -2719,11 +2777,23 @@ function renderAddBirthdaySheet(){
         ` : `
           <div class="field"><label>${t("Prénom")}</label><input type="text" id="bd-first" value="${escapeHtml(newBd.firstName)}" /></div>
           <div class="field"><label>${t("Nom de famille (facultatif)")}</label><input type="text" id="bd-last" value="${escapeHtml(newBd.lastName)}" /></div>
+        `}
+        <div class="field">
+          <label>${t("Date")}</label>
+          <div style="display:flex; gap:8px;">
+            <select id="bd-day">${dayOptions(newBd.day)}</select>
+            <select id="bd-month">${monthOptions(newBd.month)}</select>
+          </div>
+        </div>
+        ${newBd.mode === "ext" ? `
           <div class="field">
             <label>${t("Photo (facultatif)")}</label>
-            <div class="avatar-upload-zone" id="bd-photo-zone">${newBd.photo ? `<img src="${newBd.photo}" alt=""/>` : `<span>${icon("camera",15)} ${t("Ajouter")}</span>`}</div>
+            <div style="display:flex; align-items:center; gap:14px;">
+              <div class="avatar-upload-zone" id="bd-photo-zone">${newBd.photo ? `<img src="${newBd.photo}" alt=""/>` : `<span>${icon("camera",15)} ${t("Ajouter")}</span>`}</div>
+              ${newBd.photoSrc ? `<button class="btn-text" id="bd-crop-btn">${icon("crop",14)} ${t("Recadrer")}</button>` : ""}
+            </div>
           </div>
-        `}
+        ` : ""}
         <button class="btn-primary" id="bd-save">${t("Enregistrer")}</button>
       </div>
     </div>
@@ -2739,6 +2809,11 @@ function bindAddBirthdaySheet(){
   if(mem) mem.addEventListener("change", e => { newBd.memberId = e.target.value; });
   const f = document.getElementById("bd-first"); if(f) f.addEventListener("input", e => { newBd.firstName = e.target.value; });
   const l = document.getElementById("bd-last"); if(l) l.addEventListener("input", e => { newBd.lastName = e.target.value; });
+  const cropBtn = document.getElementById("bd-crop-btn");
+  if(cropBtn) cropBtn.addEventListener("click", ()=>{
+    adjustFocusX = newBd.fx; adjustFocusY = newBd.fy;
+    modalType = "adjustBdPhoto"; renderOverlay();
+  });
   const pz = document.getElementById("bd-photo-zone");
   if(pz) pz.addEventListener("click", ()=>{ pendingAvatarTarget = "birthday"; document.getElementById("avatar-file").click(); });
   document.getElementById("bd-save").addEventListener("click", async (e)=>{
@@ -2856,7 +2931,7 @@ function bindGroupScreen(){
       modalType = "addBirthday"; renderOverlay(); openOverlay();
       return;
     }
-    newPostPhotos = []; newPostFavorite = false; newPostTaggedIds = []; newPostLocation = ""; newPostExtraGroupIds = [];
+    newPostPhotos = []; newPostFavorite = false; newPostTaggedIds = []; newPostLocation = ""; newPostDate = localTodayISO(); newPostExtraGroupIds = [];
     modalType = "addPost"; renderOverlay(); openOverlay();
     if(!memberProfilesCache[activeGroupId]){
       await loadGroupMemberProfiles(activeGroupId);
@@ -3180,6 +3255,7 @@ function renderOverlay(){
   else if(modalType === "installHelp") { sheet.innerHTML = renderInstallHelpSheet(); bindInstallHelpSheet(); }
   else if(modalType === "editProfile") { sheet.innerHTML = renderEditProfileSheet(); bindEditProfileSheet(); }
   else if(modalType === "addBirthday") { sheet.innerHTML = renderAddBirthdaySheet(); bindAddBirthdaySheet(); }
+  else if(modalType === "adjustBdPhoto") { sheet.innerHTML = renderAdjustBdPhotoSheet(); bindAdjustBdPhotoSheet(); }
   else if(modalType === "addBirthdayStory") { sheet.innerHTML = renderAddBirthdayStorySheet(); bindAddBirthdayStorySheet(); }
   else if(modalType === "adjustCrop") { sheet.innerHTML = renderAdjustCropSheet(); bindAdjustCropSheet(); }
   else if(modalType === "adjustNewPhotoCrop") { sheet.innerHTML = renderAdjustNewPhotoCropSheet(); bindAdjustNewPhotoCropSheet(); }
@@ -3425,7 +3501,12 @@ function bindEditProfileSheet(){
     currentUser.avatarColor = selectedColor;
     currentUser.avatarPhoto = finalPhoto;
     if(savedOk){ currentUser.birthDay = eDay; currentUser.birthMonth = eMonth; }
-    memberProfilesCache = {};
+    Object.values(memberProfilesCache).forEach(list => list.forEach(m => {
+      if(m.id === currentUser.id){ m.displayName = name; m.avatarColor = selectedColor; m.avatarPhoto = finalPhoto; if(savedOk){ m.birthDay = eDay; m.birthMonth = eMonth; } }
+    }));
+    Object.values(birthdayStoriesCache).forEach(list => list.forEach(x => {
+      if(x.author_id === currentUser.id){ x.author_name = name; x.author_avatar_color = selectedColor; x.author_avatar_photo = finalPhoto; }
+    }));
     if(authUpdates.email) showToast(t("Vérifie ta nouvelle boîte mail pour confirmer le changement d'adresse 📬"));
     else showToast(t("Profil mis à jour partout ✅"));
     editProfilePhoto = undefined;
@@ -3755,7 +3836,7 @@ document.getElementById("avatar-file").addEventListener("change", async (e)=>{
   const file = e.target.files[0];
   e.target.value = "";
   if(!file || !pendingAvatarTarget) return;
-  const dataUrl = await compressImage(file, 300);
+  const dataUrl = pendingAvatarTarget === "birthday" ? null : await compressImage(file, 300);
   if(pendingAvatarTarget === "signup"){
     signupPhoto = dataUrl;
     render();
@@ -3763,7 +3844,11 @@ document.getElementById("avatar-file").addEventListener("change", async (e)=>{
     editProfilePhoto = dataUrl;
     renderOverlay();
   } else if(pendingAvatarTarget === "birthday"){
-    if(newBd) newBd.photo = dataUrl;
+    if(newBd){
+      const src = await compressImage(file, 1200, 0.85);
+      newBd.photoSrc = src; newBd.fx = 50; newBd.fy = 50;
+      newBd.photo = await bakeSquareCrop(src, 50, 50, 400);
+    }
     if(modalType === "addBirthday") renderOverlay();
   }
   pendingAvatarTarget = null;
@@ -3795,6 +3880,10 @@ function renderAddPostSheet(){
         <div class="field">
           <label>${t("Légende")}</label>
           <input type="text" id="post-caption" placeholder="${t("Raconte ce moment…")}" />
+        </div>
+        <div class="field">
+          <label>${t("Date")}</label>
+          <input type="date" id="post-date" value="${newPostDate || localTodayISO()}" max="${localTodayISO()}" />
         </div>
         <div class="field">
           <label>${t("Lieu (facultatif)")}</label>
@@ -3857,6 +3946,8 @@ function bindAddPostSheet(){
       renderOverlay();
     });
   });
+  const dateInput = document.getElementById("post-date");
+  dateInput.addEventListener("change", ()=>{ newPostDate = dateInput.value; });
   const favCheck = document.getElementById("post-favorite");
   favCheck.addEventListener("change", ()=>{ newPostFavorite = favCheck.checked; });
   const locationInput = document.getElementById("post-location");
@@ -3898,7 +3989,7 @@ function bindAddPostSheet(){
     const caption = document.getElementById("post-caption").value.trim();
     const group = getGroup(activeGroupId);
     const post = {
-      date: todayISO(), caption: caption || "…", photos: newPostPhotos, favorite: newPostFavorite,
+      date: (document.getElementById("post-date").value || localTodayISO()), caption: caption || "…", photos: newPostPhotos, favorite: newPostFavorite,
       location: newPostLocation.trim(), taggedIds: newPostTaggedIds
     };
     await insertPost(group.id, post);

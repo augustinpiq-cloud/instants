@@ -522,6 +522,8 @@
   .app-header .icon-btn{ position:relative; }
   .hdr-actions{ display:flex; align-items:center; gap:6px; flex-shrink:0; margin-right:-6px; }
   .hdr-actions .icon-btn{ width:36px; height:36px; }
+  .modal-sheet.crop{ height:95vh; height:95dvh; max-height:95vh; max-height:95dvh; }
+  .modal-sheet.crop .sheet-body{ padding-bottom:calc(28px + env(safe-area-inset-bottom)); }
   .modal-sheet.full{ max-width:none; height:100%; max-height:100%; border-radius:0; padding-top:env(safe-area-inset-top); }
   .bd-month{ font-family:'Poppins',sans-serif; font-size:14px; font-weight:600; margin:18px 4px 6px; color:var(--pine); text-transform:capitalize; }
   .bd-line{ display:flex; align-items:center; gap:12px; padding:7px 4px; border-bottom:1px solid var(--line); font-size:14.5px; }
@@ -699,6 +701,7 @@ let storyMonthsGlobal = [];
 let storyMonthIndex = 0;
 let storyFrameIndex = 0;
 let storyTimer = null;
+let adjustZoom = 1;
 let adjustFocusX = 50;
 let adjustFocusY = 50;
 let memberProfilesCache = {}; // groupId -> [{id, displayName, avatarColor, avatarPhoto}]
@@ -745,7 +748,8 @@ function dow(){ return lang() === "en" ? DOW_EN : DOW_FR; }
 function dateLocale(){ return lang() === "en" ? "en-GB" : "fr-FR"; }
 
 const I18N_EN = {
-  "Fais glisser la photo pour choisir ce qui est affiché": "Drag the photo to choose what is shown",
+  "⚠️ Zoom impossible pour cette photo.": "⚠️ Zoom not possible for this photo.",
+  "Fais glisser la photo, pince pour zoomer": "Drag the photo, pinch to zoom",
   "demain": "tomorrow",
   "Recadrer": "Crop",
   "Aperçu": "Preview",
@@ -2701,19 +2705,8 @@ function renderBirthdaysView(group){
     }).join("")}
   `;
 }
-function bakeSquareCrop(dataUrl, fx, fy, size){
-  return new Promise((resolve)=>{
-    const img = new Image();
-    img.onload = ()=>{
-      const side = Math.min(img.width, img.height);
-      const sx = (img.width - side) * fx / 100, sy = (img.height - side) * fy / 100;
-      const c = document.createElement("canvas"); c.width = size; c.height = size;
-      c.getContext("2d").drawImage(img, sx, sy, side, side, 0, 0, size, size);
-      resolve(c.toDataURL("image/jpeg", 0.85));
-    };
-    img.onerror = ()=> resolve(dataUrl);
-    img.src = dataUrl;
-  });
+async function bakeSquareCrop(dataUrl, fx, fy, size, zoom){
+  return (await bakeCrop(dataUrl, fx, fy, zoom || 1, size, size)) || dataUrl;
 }
 function renderAdjustBdPhotoSheet(){
   return `
@@ -2722,9 +2715,9 @@ function renderAdjustBdPhotoSheet(){
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
-      <p class="section-label" style="padding:14px 18px 0;">${t("Fais glisser la photo pour choisir ce qui est affiché")}</p>
+      <p class="section-label" style="padding:14px 18px 0;">${t("Fais glisser la photo, pince pour zoomer")}</p>
       <div class="pan-frame round" id="pan-frame">
-        <img src="${newBd.photoSrc}" draggable="false" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
+        <img src="${newBd.photoSrc}" draggable="false" style="object-position:${adjustFocusX}% ${adjustFocusY}%; transform:scale(${adjustZoom}); transform-origin:${adjustFocusX}% ${adjustFocusY}%;" alt=""/>
       </div>
       <div class="form-block" style="padding-top:16px;">
         <button class="btn-primary" id="save-crop-btn">${t("Valider ce cadrage")}</button>
@@ -2736,8 +2729,8 @@ function bindAdjustBdPhotoSheet(){
   document.getElementById("close-sheet").addEventListener("click", ()=>{ modalType = "addBirthday"; renderOverlay(); });
   mountPanCrop(document.getElementById("pan-frame"));
   document.getElementById("save-crop-btn").addEventListener("click", async ()=>{
-    newBd.fx = adjustFocusX; newBd.fy = adjustFocusY;
-    newBd.photo = await bakeSquareCrop(newBd.photoSrc, adjustFocusX, adjustFocusY, 400);
+    newBd.fx = adjustFocusX; newBd.fy = adjustFocusY; newBd.fz = adjustZoom;
+    newBd.photo = await bakeSquareCrop(newBd.photoSrc, adjustFocusX, adjustFocusY, 400, adjustZoom);
     modalType = "addBirthday"; renderOverlay();
   });
 }
@@ -2806,7 +2799,7 @@ function bindAddBirthdaySheet(){
   const l = document.getElementById("bd-last"); if(l) l.addEventListener("input", e => { newBd.lastName = e.target.value; });
   const cropBtn = document.getElementById("bd-crop-btn");
   if(cropBtn) cropBtn.addEventListener("click", ()=>{
-    adjustFocusX = newBd.fx; adjustFocusY = newBd.fy;
+    adjustFocusX = newBd.fx; adjustFocusY = newBd.fy; adjustZoom = newBd.fz || 1;
     modalType = "adjustBdPhoto"; renderOverlay();
   });
   const pz = document.getElementById("bd-photo-zone");
@@ -3068,7 +3061,7 @@ function attachContentHandlers(){
 
 /* ===================== Overlay / modal ===================== */
 function openOverlay(){ document.getElementById("overlay").classList.add("open"); }
-function closeOverlay(){ document.getElementById("overlay").classList.remove("open"); document.getElementById("modal-sheet").classList.remove("full"); modalType = null; }
+function closeOverlay(){ document.getElementById("overlay").classList.remove("open"); document.getElementById("modal-sheet").classList.remove("crop"); modalType = null; }
 document.getElementById("overlay").addEventListener("click", (e)=>{ if(e.target.id === "overlay") closeOverlay(); });
 
 /* ===================== Stories (month recap, Instagram-style) ===================== */
@@ -3245,6 +3238,7 @@ document.getElementById("lightbox-next").addEventListener("click", ()=>{
 
 function renderOverlay(){
   const sheet = document.getElementById("modal-sheet");
+  sheet.classList.toggle("crop", modalType === "adjustCrop" || modalType === "adjustNewPhotoCrop" || modalType === "adjustBdPhoto");
   if(modalType === "postDetail") { sheet.innerHTML = renderPostDetailSheet(); bindPostDetailSheet(); }
   else if(modalType === "addPost") { sheet.innerHTML = renderAddPostSheet(); bindAddPostSheet(); }
   else if(modalType === "installHelp") { sheet.innerHTML = renderInstallHelpSheet(); bindInstallHelpSheet(); }
@@ -3273,9 +3267,9 @@ function renderAdjustNewPhotoCropSheet(){
           `).join("")}
         </div>
       ` : ""}
-      <p class="section-label" style="padding:14px 18px 0;">${t("Fais glisser la photo pour choisir ce qui est affiché")}</p>
+      <p class="section-label" style="padding:14px 18px 0;">${t("Fais glisser la photo, pince pour zoomer")}</p>
       <div class="pan-frame" id="pan-frame">
-        <img src="${photo.url}" draggable="false" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
+        <img src="${photo.url}" draggable="false" style="object-position:${adjustFocusX}% ${adjustFocusY}%; transform:scale(${adjustZoom}); transform-origin:${adjustFocusX}% ${adjustFocusY}%;" alt=""/>
       </div>
       <div class="form-block" style="padding-top:16px;">
         <button class="btn-primary" id="save-crop-btn">${t("Valider ce cadrage")}</button>
@@ -3291,14 +3285,21 @@ function bindAdjustNewPhotoCropSheet(){
     el.addEventListener("click", ()=>{
       adjustNewPhotoIndex = Number(el.dataset.newphotoIndex);
       const p = newPostPhotos[adjustNewPhotoIndex];
-      adjustFocusX = p.focusX; adjustFocusY = p.focusY;
+      adjustFocusX = p.focusX; adjustFocusY = p.focusY; adjustZoom = 1;
       renderOverlay();
     });
   });
   mountPanCrop(document.getElementById("pan-frame"));
-  document.getElementById("save-crop-btn").addEventListener("click", ()=>{
-    newPostPhotos[adjustNewPhotoIndex].focusX = adjustFocusX;
-    newPostPhotos[adjustNewPhotoIndex].focusY = adjustFocusY;
+  document.getElementById("save-crop-btn").addEventListener("click", async (e)=>{
+    const ph = newPostPhotos[adjustNewPhotoIndex];
+    if(adjustZoom > 1.01){
+      e.currentTarget.disabled = true;
+      const baked = await bakeCrop(ph.url, adjustFocusX, adjustFocusY, adjustZoom, 1600, 1200);
+      if(baked){ ph.url = baked; ph.focusX = 50; ph.focusY = 50; }
+      else { ph.focusX = adjustFocusX; ph.focusY = adjustFocusY; showToast(t("⚠️ Zoom impossible pour cette photo.")); }
+    } else {
+      ph.focusX = adjustFocusX; ph.focusY = adjustFocusY;
+    }
     modalType = "addPost";
     renderOverlay();
   });
@@ -3308,28 +3309,72 @@ function bindAdjustNewPhotoCropSheet(){
 function mountPanCrop(frame){
   if(!frame) return;
   const img = frame.querySelector("img");
-  let dragging = false, sx = 0, sy = 0, fx0 = 0, fy0 = 0;
+  const pts = new Map();
+  let sx = 0, sy = 0, fx0 = 0, fy0 = 0, d0 = 0, z0 = 1;
   const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
+  function apply(){
+    img.style.objectPosition = `${adjustFocusX}% ${adjustFocusY}%`;
+    img.style.transformOrigin = `${adjustFocusX}% ${adjustFocusY}%`;
+    img.style.transform = `scale(${adjustZoom})`;
+  }
   function overflow(){
     const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1, fw = frame.clientWidth, fh = frame.clientHeight;
     const sc = Math.max(fw / nw, fh / nh);
-    return { ox: nw * sc - fw, oy: nh * sc - fh };
+    return { ox: nw * sc * adjustZoom - fw, oy: nh * sc * adjustZoom - fh };
   }
+  function dist(){ const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; }
+  function rebase(){ const a = [...pts.values()][0]; if(a){ sx = a.x; sy = a.y; fx0 = adjustFocusX; fy0 = adjustFocusY; } }
   frame.addEventListener("pointerdown", (e)=>{
-    dragging = true; sx = e.clientX; sy = e.clientY; fx0 = adjustFocusX; fy0 = adjustFocusY;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     frame.classList.add("dragging");
     try{ frame.setPointerCapture(e.pointerId); }catch(err){}
+    if(pts.size === 1) rebase();
+    if(pts.size === 2){ d0 = dist(); z0 = adjustZoom; }
   });
   frame.addEventListener("pointermove", (e)=>{
-    if(!dragging) return;
-    const { ox, oy } = overflow();
-    if(ox > 1) adjustFocusX = clamp(fx0 - (e.clientX - sx) / ox * 100);
-    if(oy > 1) adjustFocusY = clamp(fy0 - (e.clientY - sy) / oy * 100);
-    img.style.objectPosition = `${adjustFocusX}% ${adjustFocusY}%`;
+    if(!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if(pts.size >= 2){
+      adjustZoom = Math.max(1, Math.min(4, Math.round(z0 * dist() / d0 * 100) / 100));
+    } else {
+      const { ox, oy } = overflow();
+      const cur = [...pts.values()][0];
+      if(ox > 1) adjustFocusX = clamp(fx0 - (cur.x - sx) / ox * 100);
+      if(oy > 1) adjustFocusY = clamp(fy0 - (cur.y - sy) / oy * 100);
+    }
+    apply();
   });
-  const end = ()=>{ dragging = false; frame.classList.remove("dragging"); };
+  const end = (e)=>{
+    pts.delete(e.pointerId);
+    if(pts.size === 1) rebase();
+    if(pts.size === 0) frame.classList.remove("dragging");
+  };
   frame.addEventListener("pointerup", end);
   frame.addEventListener("pointercancel", end);
+  frame.addEventListener("wheel", (e)=>{   // trackpad / mouse zoom on a computer
+    e.preventDefault();
+    adjustZoom = Math.max(1, Math.min(4, Math.round((adjustZoom - e.deltaY * 0.005) * 100) / 100));
+    apply();
+  }, { passive:false });
+}
+/* Bakes the visible area (focus + zoom) of an image into a new w x h JPEG */
+function bakeCrop(src, fx, fy, zoom, w, h){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = ()=>{
+      const sc = Math.max(w / img.width, h / img.height);
+      const vw = w / (sc * zoom), vh = h / (sc * zoom);
+      const sx = (img.width - vw) * fx / 100, sy = (img.height - vh) * fy / 100;
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      try{
+        c.getContext("2d").drawImage(img, sx, sy, vw, vh, 0, 0, w, h);
+        resolve(c.toDataURL("image/jpeg", 0.88));
+      }catch(e){ resolve(null); }
+    };
+    img.onerror = ()=> resolve(null);
+    img.src = src;
+  });
 }
 
 function renderAdjustCropSheet(){
@@ -3351,9 +3396,9 @@ function renderAdjustCropSheet(){
           `).join("")}
         </div>
       ` : ""}
-      <p class="section-label" style="padding:14px 18px 0;">${t("Fais glisser la photo pour choisir ce qui est affiché")}</p>
+      <p class="section-label" style="padding:14px 18px 0;">${t("Fais glisser la photo, pince pour zoomer")}</p>
       <div class="pan-frame" id="pan-frame">
-        <img src="${photo.url}" draggable="false" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
+        <img src="${photo.url}" draggable="false" style="object-position:${adjustFocusX}% ${adjustFocusY}%; transform:scale(${adjustZoom}); transform-origin:${adjustFocusX}% ${adjustFocusY}%;" alt=""/>
       </div>
       <div class="form-block" style="padding-top:16px;">
         <button class="btn-primary" id="save-crop-btn">${t("Enregistrer ce cadrage")}</button>
@@ -3371,7 +3416,7 @@ function bindAdjustCropSheet(){
     el.addEventListener("click", ()=>{
       adjustCropPhotoIndex = Number(el.dataset.photoIndex);
       const p = post.photos[adjustCropPhotoIndex];
-      adjustFocusX = p.focusX; adjustFocusY = p.focusY;
+      adjustFocusX = p.focusX; adjustFocusY = p.focusY; adjustZoom = 1;
       renderOverlay();
     });
   });
@@ -3380,7 +3425,21 @@ function bindAdjustCropSheet(){
     const btn = e.currentTarget;
     btn.disabled = true; btn.textContent = t("Enregistrement…");
     const photo = post.photos[adjustCropPhotoIndex];
-    await setPhotoFocus(photo.id, adjustFocusX, adjustFocusY);
+    if(adjustZoom > 1.01){
+      const baked = await bakeCrop(photo.url, adjustFocusX, adjustFocusY, adjustZoom, 1600, 1200);
+      if(!baked){
+        btn.disabled = false; btn.textContent = t("Enregistrer ce cadrage");
+        showToast(t("⚠️ Zoom impossible pour cette photo."));
+        return;
+      }
+      const path = await uploadPhotoToStorage(baked, group.id, post.id + "-zoom");
+      const value = path || baked;
+      if(photo.id) await sb.from("post_photos").update({ photo: value }).eq("id", photo.id);
+      if(adjustCropPhotoIndex === 0) await sb.from("posts").update({ photo: value }).eq("id", post.id);
+      await setPhotoFocus(photo.id, 50, 50);
+    } else {
+      await setPhotoFocus(photo.id, adjustFocusX, adjustFocusY);
+    }
     await loadGroupPosts(group.id);
     btn.disabled = false; btn.textContent = t("Enregistrer ce cadrage");
     modalType = "postDetail";
@@ -3678,7 +3737,7 @@ function bindPostDetailSheet(){
       adjustCropPostId = post.id;
       adjustCropPhotoIndex = 0;
       adjustFocusX = post.photos[0].focusX;
-      adjustFocusY = post.photos[0].focusY;
+      adjustFocusY = post.photos[0].focusY; adjustZoom = 1;
       modalType = "adjustCrop";
       renderOverlay();
     });
@@ -3938,7 +3997,7 @@ function bindAddPostSheet(){
     el.addEventListener("click", ()=>{
       adjustNewPhotoIndex = Number(el.dataset.adjustIndex);
       const p = newPostPhotos[adjustNewPhotoIndex];
-      adjustFocusX = p.focusX; adjustFocusY = p.focusY;
+      adjustFocusX = p.focusX; adjustFocusY = p.focusY; adjustZoom = 1;
       modalType = "adjustNewPhotoCrop";
       renderOverlay();
     });

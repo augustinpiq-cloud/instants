@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Wyle — Conditions d'utilisation</title>
+<style>
+  :root{
+    --ink:#1E2A22; --ink-soft:#4B564C;
+    --paper:#F6F1E4; --paper-dim:#EEE7D4;
+    --pine:#1F3329; --pine-deep:#182720;
+    --gold:#C9A24C; --rose:#A66B63;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    background:var(--paper); color:var(--ink); line-height:1.6;
+  }
+  header{
+    background:linear-gradient(120deg, var(--pine-deep), var(--pine));
+    color:#fff; padding:48px 24px 36px; text-align:center;
+  }
+  header h1{
+    font-family:'Poppins',sans-serif; font-weight:800; margin:0 0 6px;
+    background:linear-gradient(100deg, #fff, var(--gold) 65%, var(--rose));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    font-size:32px;
+  }
+  header p{ margin:0; opacity:0.85; font-size:14px; }
+  main{ max-width:680px; margin:0 auto; padding:32px 24px 80px; }
+  h2{ font-family:'Poppins',sans-serif; font-size:19px; color:var(--pine); margin:36px 0 10px; }
+  p, li{ font-size:15px; color:var(--ink); }
+  .updated{ color:var(--ink-soft); font-size:13px; margin-bottom:28px; }
+  ul{ padding-left:20px; }
+  .lang-toggle{ text-align:center; margin:20px 0 0; }
+  .lang-toggle button{
+    all:unset; cursor:pointer; padding:8px 16px; border-radius:10px; font-size:13px; font-weight:600;
+    color:#fff; opacity:0.7; margin:0 4px;
+  }
+  .lang-toggle button.active{ opacity:1; background:rgba(255,255,255,0.15); }
+  section{ display:none; }
+  section.active{ display:block; }
+  footer{ text-align:center; color:var(--ink-soft); font-size:13px; padding:20px; }
+  a{ color:var(--rose); }
+</style>
+</head>
+<body>
+<header>
+  <h1>A Wyle</h1>
+  <p>Conditions d'utilisation / Terms of Use</p>
+  <div class="lang-toggle">
+    <button id="btn-fr" class="active">Français</button>
+    <button id="btn-en">English</button>
+  </div>
+</header>
+<main>
+  <section id="fr" class="active">
+    <p class="updated">Dernière mise à jour : 7 octobre 2026</p>
+
+    <p>A Wyle est un carnet privé où un groupe de proches partage ses photos.
+    En créant un compte, tu acceptes les règles ci-dessous.</p>
+
+    <h2>Contenus interdits</h2>
+    <p>Aucune tolérance pour les contenus choquants ou abusifs. Il est interdit de publier :</p>
+    <ul>
+      <li>des contenus sexuellement explicites, violents, haineux, discriminatoires ou qui incitent à la violence ;</li>
+      <li>du harcèlement, des menaces ou des contenus visant à humilier une personne ;</li>
+      <li>des contenus illégaux, ou des photos de personnes publiées sans leur accord ;</li>
+      <li>toute photo ou information concernant des mineurs de nature inappropriée.</li>
+    </ul>
+
+    <h2>Signaler et bloquer</h2>
+    <p>Tu peux signaler n'importe quelle photo ou n'importe quel commentaire avec
+    le bouton drapeau, et bloquer son auteur : tu ne verras alors plus ses
+    contenus. Les signalements sont examinés sous 24 heures. Un contenu
+    contraire à ces règles est supprimé et son auteur peut être exclu de
+    l'application.</p>
+
+    <h2>Ton compte</h2>
+    <p>Tu es responsable de ce que tu publies. Tu peux supprimer ton compte et
+    toutes tes données à tout moment depuis Profil &gt; Supprimer mon compte.</p>
+
+    <h2>Contact</h2>
+    <p>Pour toute question ou tout signalement :
+    <a href="mailto:contact@awyle.com">contact@awyle.com</a></p>
+  </section>
+
+  <section id="en">
+    <p class="updated">Last updated: October 7, 2026</p>
+
+    <p>A Wyle is a private notebook where a group of close friends shares
+    photos. By creating an account, you agree to the rules below.</p>
+
+    <h2>Prohibited content</h2>
+    <p>There is no tolerance for objectionable or abusive content. You must not post:</p>
+    <ul>
+      <li>sexually explicit, violent, hateful or discriminatory content, or content that incites violence;</li>
+      <li>harassment, threats or content meant to humiliate someone;</li>
+      <li>illegal content, or photos of people posted without their consent;</li>
+      <li>any inappropriate photo or information involving minors.</li>
+    </ul>
+
+    <h2>Report and block</h2>
+    <p>You can report any photo or comment with the flag button, and block its
+    author: you will no longer see their content. Reports are reviewed within
+    24 hours. Content that breaks these rules is removed and its author may
+    be removed from the app.</p>
+
+    <h2>Your account</h2>
+    <p>You are responsible for what you post. You can delete your account and
+    all your data at any time from Profile &gt; Delete my account.</p>
+
+    <h2>Contact</h2>
+    <p>For any question or report:
+    <a href="mailto:contact@awyle.com">contact@awyle.com</a></p>
+  </section>
+</main>
+<footer>A Wyle</footer>
+<script>
+  const btnFr = document.getElementById('btn-fr');
+  const btnEn = document.getElementById('btn-en');
+  const secFr = document.getElementById('fr');
+  const secEn = document.getElementById('en');
+  btnFr.addEventListener('click', ()=>{
+    btnFr.classList.add('active'); btnEn.classList.remove('active');
+    secFr.classList.add('active'); secEn.classList.remove('active');
+  });
+  btnEn.addEventListener('click', ()=>{
+    btnEn.classList.add('active'); btnFr.classList.remove('active');
+    secEn.classList.add('active'); secFr.classList.remove('active');
+  });
+</script>
+</body>
+</html>

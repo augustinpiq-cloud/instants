@@ -88,6 +88,9 @@
     font-size:14.5px; outline:none; background:#fff;
   }
   .field input:focus{ border-color:var(--teal); }
+  .field select{
+    border:1px solid var(--line); border-radius:10px; padding:11px 10px; font-size:14.5px; outline:none; background:#fff; flex:1; min-width:0; color:var(--ink);
+  }
   .pin-row{ display:flex; gap:8px; }
   .pin-row input{ text-align:center; letter-spacing:2px; }
   .color-picker{ display:flex; gap:8px; flex-wrap:wrap; margin-top:2px; }
@@ -321,6 +324,8 @@
     all:unset; cursor:pointer; font-size:11px; margin-left:7px; opacity:0.6; vertical-align:middle;
   }
   .edit-comment-btn:hover{ opacity:1; }
+  .report-comment-btn{ all:unset; cursor:pointer; opacity:.55; margin-left:8px; vertical-align:middle; color:var(--ink-soft); }
+  .report-comment-btn:hover, .report-comment-btn:focus-visible{ opacity:1; }
   .comment-edit-row{ display:flex; gap:8px; align-items:center; }
   .comment-edit-row .edit-comment-input{
     flex:1; border:1px solid var(--line); border-radius:16px; padding:6px 12px; font-size:13px; outline:none;
@@ -504,6 +509,23 @@
     body{ display:flex; align-items:center; justify-content:center; }
     .app-shell{ height:92vh; max-height:900px; border-radius:28px; margin:20px auto; }
   }
+
+  /* ---- Header view buttons + birthdays ---- */
+  .app-header .icon-btn{ position:relative; }
+  .app-header .icon-btn.active{ background:rgba(255,255,255,0.24); }
+  .app-header .icon-btn .emoji-ic{ font-size:17px; line-height:1; }
+  .app-header .icon-btn.has-dot::after{ content:""; position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:#E8645A; border:1.5px solid var(--pine); }
+  .day-cake{ position:absolute; z-index:2; top:2px; right:3px; font-size:12px; line-height:1; }
+  .bd-banner{ display:flex; align-items:center; gap:10px; background:var(--gold-soft); border-radius:12px; padding:11px 14px; margin:4px 0 12px; font-size:13.5px; cursor:pointer; }
+  .bd-section-title{ font-family:'Poppins',sans-serif; font-size:14px; font-weight:600; margin:14px 4px 8px; color:var(--ink); }
+  .bd-row{ display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px; }
+  .bd-row .bd-info{ flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.3; }
+  .bd-row .bd-info strong{ font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bd-row .bd-info span{ font-size:12px; color:var(--ink-soft); }
+  .bd-row.is-today{ border-color:var(--gold); background:var(--gold-soft); }
+  .bd-del{ all:unset; cursor:pointer; color:var(--ink-soft); padding:6px; font-size:14px; }
+  .bd-add-story{ margin:2px 0 10px; font-size:13px; padding:9px 12px; }
+  .story-circle.no-story .story-ring{ opacity:0.75; }
 </style>
 </head>
 <body>
@@ -538,6 +560,7 @@
 <input type="file" id="hidden-file" accept="image/*" multiple style="display:none" />
 <input type="file" id="reply-file" accept="image/*" style="display:none" />
 <input type="file" id="avatar-file" accept="image/*" style="display:none" />
+<input type="file" id="bstory-file" accept="image/*" style="display:none" />
 <input type="file" id="edit-photo-file" accept="image/*" style="display:none" />
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -634,6 +657,8 @@ async function disablePushNotifications(){
 let groupsData = [];     // {id, name, subtitle, memberUsernames, joinCode, createdBy} — memberUsernames now holds auth user ids
 let postsCache = {};     // groupId -> posts[]
 let currentUser = null;  // {id, email, displayName, avatarColor, avatarPhoto}
+let blockedIds = new Set();   // ids of users the current user has blocked (their content is hidden)
+let blockedLoaded = false;
 let screen = "loading";  // loading | login | home | profile | createGroup | joinGroup | group | resetPassword
 let authMode = "login";  // login | signup | forgotPassword
 let selectedColor = "#4C7A6C";
@@ -671,6 +696,12 @@ let installBannerDismissed = false;
 let deferredInstallPrompt = null;
 let seenMap = {}; // groupId -> number of posts seen at last visit, for this user
 let signupPhoto = null;  // optional avatar dataURL chosen during signup
+let birthdaysCache = {};       // groupId -> raw rows from "birthdays" (photoUrl resolved)
+let birthdayStoriesCache = {}; // groupId -> today's birthday story rows (photoUrl resolved)
+let newBd = null;              // add-birthday sheet state
+let bdStory = null;            // add-birthday-story sheet state
+let newPostExtraGroupIds = []; // other notebooks to publish the same post to
+let signupBirthDay = "", signupBirthMonth = "";
 let editProfilePhoto = undefined; // undefined = unchanged, null = removed, dataURL = new photo, set when opening edit sheet
 
 const PALETTE = ["#4C7A6C","#A66B63","#C9A24C","#5C6FA6","#8A7CA8","#7A9E6E","#B08968"];
@@ -693,6 +724,40 @@ function dow(){ return lang() === "en" ? DOW_EN : DOW_FR; }
 function dateLocale(){ return lang() === "en" ? "en-GB" : "fr-FR"; }
 
 const I18N_EN = {
+  "Anniversaires": "Birthdays",
+  "anniversaire": "birthday",
+  "Anniversaires du groupe": "Group birthdays",
+  "Aujourd'hui 🎂": "Today 🎂",
+  "Demain": "Tomorrow",
+  "Jour": "Day",
+  "Mois": "Month",
+  "Aucun anniversaire pour l'instant.": "No birthdays yet.",
+  "Appuie sur + pour en ajouter un.": "Tap + to add one.",
+  "Ajouter un anniversaire": "Add a birthday",
+  "Date": "Date",
+  "Pour qui ?": "Who is it for?",
+  "Un membre du groupe": "A group member",
+  "Une personne hors du groupe": "Someone outside the group",
+  "Choisis un membre": "Choose a member",
+  "moi": "me",
+  "Tous les membres ont déjà un anniversaire enregistré.": "All members already have a birthday saved.",
+  "Nom de famille (facultatif)": "Last name (optional)",
+  "Photo (facultatif)": "Photo (optional)",
+  "Choisis une date valide (jour et mois).": "Choose a valid date (day and month).",
+  "Choisis un membre du groupe.": "Choose a group member.",
+  "Entre un prénom.": "Enter a first name.",
+  "Anniversaire ajouté 🎂": "Birthday added 🎂",
+  "Changer": "Change",
+  "Petit mot (facultatif)": "Short message (optional)",
+  "Joyeux anniversaire !": "Happy birthday!",
+  "Ajouté à la story d'anniversaire 🎉": "Added to the birthday story 🎉",
+  "Les autres membres peuvent y ajouter des photos 🎉": "The other members can add photos to it 🎉",
+  "Supprimer cet anniversaire ?": "Delete this birthday?",
+  "Supprimer": "Delete",
+  "Publier aussi dans d'autres carnets": "Also publish in other notebooks",
+  "Date de naissance (facultatif)": "Date of birth (optional)",
+  "Jour et mois seulement, pour que ton groupe pense à ton anniversaire 🎂": "Day and month only, so your group remembers your birthday 🎂",
+  "Choisis une date de naissance valide (jour et mois), ou laisse les deux vides.": "Choose a valid date of birth (day and month), or leave both empty.",
   "Rester connecté en se déconnectant": "Stay connected by disconnecting",
   "Le carnet du groupe": "The group's photo book",
   "Choisis un nouveau mot de passe": "Choose a new password",
@@ -863,7 +928,24 @@ const I18N_EN = {
   "⚠️ Cette photo ne peut pas encore être recadrée — republie-la pour activer le cadrage.": "⚠️ This photo can't be reframed yet — repost it to enable framing.",
   "⚠️ Cadrage impossible pour l'instant.": "⚠️ Couldn't save the framing right now.",
   "⚠️ Commentaire impossible pour l'instant.": "⚠️ Couldn't post the comment right now.",
-  "⚠️ Réponse impossible pour l'instant.": "⚠️ Couldn't post the reply right now."
+  "⚠️ Réponse impossible pour l'instant.": "⚠️ Couldn't post the reply right now.",
+  "⚠️ Action impossible pour l'instant.": "⚠️ Couldn't do that right now.",
+  "Signaler ce contenu comme inapproprié ? Il sera examiné par la modération.": "Report this content as inappropriate? It will be reviewed by moderation.",
+  "Merci, signalement envoyé": "Thanks, report sent",
+  "Bloquer": "Block",
+  "Tu ne verras plus ses photos ni ses commentaires.": "You will no longer see their photos or comments.",
+  "Utilisateur bloqué": "User blocked",
+  "Signaler ou bloquer": "Report or block",
+  "Supprimer définitivement ton compte ? Toutes tes photos, commentaires et réactions seront effacés. Cette action est irréversible.": "Permanently delete your account? All your photos, comments and reactions will be erased. This cannot be undone.",
+  "Dernière confirmation : supprimer mon compte pour toujours ?": "Final confirmation: delete my account forever?",
+  "Compte supprimé": "Account deleted",
+  "Supprimer mon compte": "Delete my account",
+  "Conditions d'utilisation": "Terms of use",
+  "conditions d'utilisation": "terms of use",
+  "Politique de confidentialité": "Privacy policy",
+  "politique de confidentialité": "privacy policy",
+  "En créant un compte, tu acceptes les": "By creating an account, you agree to the",
+  "et la": "and the"
 };
 function t(s){
   if(lang() !== "en") return s;
@@ -972,7 +1054,7 @@ async function fetchProfile(userId){
   try{
     const { data, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
     if(error || !data) return null;
-    return { id: userId, displayName: data.display_name, avatarColor: data.avatar_color, avatarPhoto: data.avatar_photo, lang: data.lang };
+    return { id: userId, displayName: data.display_name, avatarColor: data.avatar_color, avatarPhoto: data.avatar_photo, lang: data.lang, birthDay: data.birth_day || null, birthMonth: data.birth_month || null };
   }catch(e){ console.error("fetchProfile error", e); return null; }
 }
 async function upsertProfile(userId, fields){
@@ -982,6 +1064,8 @@ async function upsertProfile(userId, fields){
     if(fields.avatarColor !== undefined) row.avatar_color = fields.avatarColor;
     if(fields.avatarPhoto !== undefined) row.avatar_photo = fields.avatarPhoto;
     if(fields.lang !== undefined) row.lang = fields.lang;
+    if(fields.birthDay !== undefined) row.birth_day = fields.birthDay;
+    if(fields.birthMonth !== undefined) row.birth_month = fields.birthMonth;
     const { error } = await sb.from("profiles").upsert(row);
     if(error){ console.error("upsertProfile error", error); return false; }
     return true;
@@ -1014,14 +1098,21 @@ async function buildCurrentUser(authUser){
   let userLang = (profile && profile.lang) || meta.lang || "fr";
   const brokenName = !displayName || displayName === authUser.email;
   if(brokenName){ displayName = authUser.email.split("@")[0]; }
-  if(!profile || brokenName || (profile && !profile.lang)){
-    await upsertProfile(authUser.id, { displayName, avatarColor, avatarPhoto, lang: userLang });
+  let birthDay = profile ? profile.birthDay : null;
+  let birthMonth = profile ? profile.birthMonth : null;
+  let needsBirthSave = false;
+  if(!birthDay && meta.birth_day && meta.birth_month){
+    birthDay = Number(meta.birth_day); birthMonth = Number(meta.birth_month); needsBirthSave = true;
+  }
+  if(!profile || brokenName || (profile && !profile.lang) || needsBirthSave){
+    await upsertProfile(authUser.id, { displayName, avatarColor, avatarPhoto, lang: userLang,
+      birthDay: needsBirthSave ? birthDay : undefined, birthMonth: needsBirthSave ? birthMonth : undefined });
   }
   if(brokenName){
     await syncAuthorInfoEverywhere(authUser.id, displayName, avatarColor, avatarPhoto);
   }
   currentLang = userLang;
-  return { id: authUser.id, email: authUser.email, displayName, avatarColor, avatarPhoto, lang: userLang };
+  return { id: authUser.id, email: authUser.email, displayName, avatarColor, avatarPhoto, lang: userLang, birthDay, birthMonth };
 }
 
 // Groups the current user belongs to — the database itself only returns rows
@@ -1058,11 +1149,117 @@ async function loadGroupMemberProfiles(groupId){
     if(error) throw error;
     const list = (data || []).map(row => ({
       id: row.id, displayName: row.display_name || "?",
-      avatarColor: row.avatar_color, avatarPhoto: row.avatar_photo
+      avatarColor: row.avatar_color, avatarPhoto: row.avatar_photo,
+      birthDay: row.birth_day || null, birthMonth: row.birth_month || null
     }));
     memberProfilesCache[groupId] = list;
     return list;
   }catch(e){ console.error("loadGroupMemberProfiles error", e); return memberProfilesCache[groupId] || []; }
+}
+
+/* ===================== Birthdays: data ===================== */
+function localTodayISO(){
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+async function loadGroupBirthdays(groupId){
+  try{
+    await loadBlocked();
+    await loadGroupMemberProfiles(groupId);
+    const [r1, r2] = await Promise.all([
+      sb.from("birthdays").select("*").eq("group_id", groupId),
+      sb.from("birthday_stories").select("*").eq("group_id", groupId).eq("story_date", localTodayISO()).order("created_at", { ascending:true })
+    ]);
+    if(r1.error || r2.error){ birthdaysCache[groupId] = birthdaysCache[groupId] || []; birthdayStoriesCache[groupId] = birthdayStoriesCache[groupId] || []; return; }
+    const rows = r1.data || [];
+    const stories = (r2.data || []).filter(x => !blockedIds.has(x.author_id));
+    const urlMap = await getSignedUrls([...rows.map(r=>r.photo), ...stories.map(x=>x.photo)].filter(isStoragePath));
+    rows.forEach(r => { r.photoUrl = r.photo ? (isStoragePath(r.photo) ? (urlMap[r.photo] || null) : r.photo) : null; });
+    stories.forEach(x => { x.photoUrl = isStoragePath(x.photo) ? (urlMap[x.photo] || "") : x.photo; });
+    birthdaysCache[groupId] = rows;
+    birthdayStoriesCache[groupId] = stories;
+  }catch(e){ console.error("loadGroupBirthdays error", e); }
+}
+// Everyone with a known birthday in this group: manual entries + members' own profile dates.
+function getBirthdayPeople(groupId){
+  const profs = memberProfilesCache[groupId] || [];
+  const list = [];
+  const manualMembers = new Set();
+  (birthdaysCache[groupId] || []).forEach(r => {
+    if(r.member_id){
+      manualMembers.add(r.member_id);
+      const m = profs.find(x => x.id === r.member_id);
+      list.push({ key:"m:"+r.member_id, entryId:r.id, createdBy:r.created_by, memberId:r.member_id,
+        firstName: m ? m.displayName : "?", lastName:"", color: m ? m.avatarColor : "#B08968", photo: m ? m.avatarPhoto : null, day:r.day, month:r.month });
+    } else {
+      list.push({ key:"b:"+r.id, entryId:r.id, createdBy:r.created_by, memberId:null,
+        firstName: r.first_name || "?", lastName: r.last_name || "", color:"#B08968", photo: r.photoUrl, day:r.day, month:r.month });
+    }
+  });
+  profs.forEach(m => {
+    if(m.birthDay && m.birthMonth && !manualMembers.has(m.id)){
+      list.push({ key:"m:"+m.id, entryId:null, createdBy:null, memberId:m.id,
+        firstName:m.displayName, lastName:"", color:m.avatarColor, photo:m.avatarPhoto, day:m.birthDay, month:m.birthMonth });
+    }
+  });
+  return list;
+}
+function isBirthdayToday(p){
+  const d = new Date();
+  return p.day === d.getDate() && p.month === d.getMonth()+1;
+}
+function daysUntilBirthday(day, month){
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let d = new Date(now.getFullYear(), month-1, day);
+  if(d < today) d = new Date(now.getFullYear()+1, month-1, day);
+  return Math.round((d - today) / 86400000);
+}
+function birthdayFullName(p){ return (p.firstName + (p.lastName ? " " + p.lastName : "")).trim(); }
+function birthdayDateLabel(day, month){
+  const m = months()[month-1];
+  return lang()==="en" ? `${m} ${day}` : `${day} ${m.toLowerCase()}`;
+}
+function birthdayCountdown(n){
+  if(n === 0) return t("Aujourd'hui 🎂");
+  if(n === 1) return t("Demain");
+  return lang()==="en" ? `in ${n} days` : `dans ${n} jours`;
+}
+function birthdaysOnDay(groupId, month, day){
+  return getBirthdayPeople(groupId).filter(p => p.month === month && p.day === day);
+}
+function dayOptions(sel){
+  return `<option value="">${t("Jour")}</option>` + Array.from({length:31},(_, i)=> `<option value="${i+1}" ${String(sel)===String(i+1)?"selected":""}>${i+1}</option>`).join("");
+}
+function monthOptions(sel){
+  return `<option value="">${t("Mois")}</option>` + months().map((m, i)=> `<option value="${i+1}" ${String(sel)===String(i+1)?"selected":""}>${m}</option>`).join("");
+}
+function isRealDate(day, month){ return new Date(2024, month-1, day).getMonth() === month-1; }
+async function insertBirthday(groupId, fields){
+  let photoPath = null;
+  if(fields.photo){ photoPath = await uploadPhotoToStorage(fields.photo, groupId, "bd") || fields.photo; }
+  const { error } = await sb.from("birthdays").insert({
+    group_id: groupId, member_id: fields.memberId || null,
+    first_name: fields.memberId ? null : fields.firstName, last_name: fields.memberId ? null : (fields.lastName || null),
+    photo: photoPath, day: fields.day, month: fields.month, created_by: currentUser.id
+  });
+  if(error){ console.error("insertBirthday error", error); showToast(t("⚠️ Action impossible pour l'instant.")); return false; }
+  return true;
+}
+async function deleteBirthday(id){
+  const { error } = await sb.from("birthdays").delete().eq("id", id);
+  if(error){ console.error("deleteBirthday error", error); showToast(t("⚠️ Suppression impossible pour l'instant.")); return false; }
+  return true;
+}
+async function insertBirthdayStory(groupId, subjectKey, photoDataUrl, message){
+  const path = await uploadPhotoToStorage(photoDataUrl, groupId, "bstory");
+  const { error } = await sb.from("birthday_stories").insert({
+    group_id: groupId, subject_key: subjectKey, story_date: localTodayISO(), author_id: currentUser.id,
+    author_name: currentUser.displayName, author_avatar_color: currentUser.avatarColor, author_avatar_photo: currentUser.avatarPhoto,
+    photo: path || photoDataUrl, message: message || null
+  });
+  if(error){ console.error("insertBirthdayStory error", error); showToast(t("⚠️ Publication impossible pour l'instant.")); return false; }
+  return true;
 }
 
 async function createGroupInDb(name, subtitle){
@@ -1093,11 +1290,93 @@ async function joinGroupByCodeInDb(code){
 
 // Fetches a group's photos plus their reactions/comments/replies, and assembles
 // them into the same in-memory shape the rest of the app already expects.
-async function loadGroupPosts(groupId){
+/* ===================== Moderation & account deletion (App Store requirements) ===================== */
+async function loadBlocked(force){
+  if(blockedLoaded && !force) return;
   try{
+    const { data, error } = await sb.from("blocked_users").select("blocked_id").eq("blocker_id", currentUser.id);
+    if(error) throw error;
+    blockedIds = new Set((data || []).map(r => r.blocked_id));
+    blockedLoaded = true;
+  }catch(e){ console.error("loadBlocked error", e); }
+}
+async function blockUser(userId){
+  const { error } = await sb.from("blocked_users").upsert({ blocker_id: currentUser.id, blocked_id: userId });
+  if(error){ console.error("blockUser error", error); showToast(t("⚠️ Action impossible pour l'instant.")); return false; }
+  blockedIds.add(userId);
+  return true;
+}
+async function unblockUser(userId){
+  const { error } = await sb.from("blocked_users").delete().eq("blocker_id", currentUser.id).eq("blocked_id", userId);
+  if(error){ console.error("unblockUser error", error); showToast(t("⚠️ Action impossible pour l'instant.")); return false; }
+  blockedIds.delete(userId);
+  return true;
+}
+async function reportContent({ postId, commentId, reportedUserId }){
+  const { error } = await sb.from("reports").insert({
+    reporter_id: currentUser.id, post_id: postId || null, comment_id: commentId || null,
+    reported_user_id: reportedUserId || null, reason: "objectionable"
+  });
+  if(error){ console.error("reportContent error", error); showToast(t("⚠️ Action impossible pour l'instant.")); return false; }
+  return true;
+}
+// Two independent questions: report this content? then block its author?
+async function moderateContent({ postId, commentId, authorId, authorName }){
+  if(!authorId || authorId === currentUser.id) return;
+  let changed = false;
+  if(confirm(t("Signaler ce contenu comme inapproprié ? Il sera examiné par la modération."))){
+    if(await reportContent({ postId, commentId, reportedUserId: authorId })){
+      showToast(t("Merci, signalement envoyé")); changed = true;
+    }
+  }
+  if(confirm(`${t("Bloquer")} ${authorName || ""} ? ${t("Tu ne verras plus ses photos ni ses commentaires.")}`)){
+    if(await blockUser(authorId)){ showToast(t("Utilisateur bloqué")); changed = true; }
+  }
+  if(changed && blockedIds.has(authorId)){
+    closeOverlay();
+    await loadGroupPosts(activeGroupId);
+    render();
+  }
+}
+async function deleteMyAccount(){
+  if(!confirm(t("Supprimer définitivement ton compte ? Toutes tes photos, commentaires et réactions seront effacés. Cette action est irréversible."))) return;
+  if(!confirm(t("Dernière confirmation : supprimer mon compte pour toujours ?"))) return;
+  try{
+    // 1. Remove the user's photo files from storage (best effort)
+    const { data: myPosts } = await sb.from("posts").select("id, photo").eq("author_id", currentUser.id);
+    const ids = (myPosts || []).map(p => p.id);
+    const paths = (myPosts || []).map(p => p.photo).filter(isStoragePath);
+    if(ids.length){
+      const { data: extra } = await sb.from("post_photos").select("photo").in("post_id", ids);
+      (extra || []).forEach(ph => { if(isStoragePath(ph.photo)) paths.push(ph.photo); });
+    }
+    for(let i=0; i<paths.length; i+=100){
+      await sb.storage.from("post-photos").remove(paths.slice(i, i+100));
+    }
+    // 2. Delete the account and every row it owns (server-side function)
+    const { error } = await sb.rpc("delete_my_account");
+    if(error) throw error;
+    // 3. Leave
+    try{ await disablePushNotifications(); }catch(e){}
+    if("clearAppBadge" in navigator){ navigator.clearAppBadge().catch(()=>{}); }
+    try{ await sb.auth.signOut(); }catch(e){}
+    currentUser = null; seenMap = {}; blockedIds = new Set(); blockedLoaded = false;
+    authMode = "login"; screen = "login";
+    render();
+    showToast(t("Compte supprimé"));
+  }catch(e){
+    console.error("deleteMyAccount error", e);
+    showToast(t("⚠️ Suppression impossible pour l'instant."));
+  }
+}
+
+async function loadGroupPosts(groupId){
+  loadGroupBirthdays(groupId).then(()=>{ if(screen === "group" && activeGroupId === groupId && (activeView === "anniversaires" || activeView === "calendrier" || activeView === "fil") && document.getElementById("group-content") && modalType === null){ try{ renderGroupContentOnly(); renderHeaderDot(); }catch(e){} } }).catch(()=>{});
+  try{
+    await loadBlocked();
     const { data: postsRows, error } = await sb.from("posts").select("*").eq("group_id", groupId).order("created_at", { ascending:false });
     if(error) throw error;
-    const rows = postsRows || [];
+    const rows = (postsRows || []).filter(p => !blockedIds.has(p.author_id));
     const postIds = rows.map(p => p.id);
     let reactions = [], comments = [], replies = [], extraPhotos = [], tags = [];
     if(postIds.length){
@@ -1108,7 +1387,9 @@ async function loadGroupPosts(groupId){
         sb.from("post_photos").select("*").in("post_id", postIds).order("position", { ascending:true }),
         sb.from("post_tags").select("post_id, user_id").in("post_id", postIds)
       ]);
-      reactions = r1.data || []; comments = r2.data || []; replies = r3.data || [];
+      reactions = r1.data || [];
+      comments = (r2.data || []).filter(c => !blockedIds.has(c.author_id));
+      replies = (r3.data || []).filter(r => !blockedIds.has(r.author_id));
       extraPhotos = r4.data || []; tags = r5.data || [];
     }
     const taggedIds = [...new Set(tags.map(t => t.user_id))];
@@ -1304,7 +1585,11 @@ document.addEventListener("visibilitychange", ()=>{
 /* ===================== Install banner (Add to Home Screen) ===================== */
 function isStandalone(){
   return window.navigator.standalone === true ||
-    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+    isNativeApp();
+}
+function isNativeApp(){
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 }
 function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
 
@@ -1457,6 +1742,9 @@ function renderAuth(){
             <button class="auth-tab ${authMode==='signup'?'active':''}" data-mode="signup">${t("Créer un compte")}</button>
           </div>
           ${authMode === "login" ? renderLoginForm() : renderSignupForm()}
+          <p class="helper-text" style="margin-top:16px; text-align:center; font-size:12px; line-height:1.6;">
+            ${authMode === "signup" ? t("En créant un compte, tu acceptes les") + " " : ""}<a href="https://augustinpiq-cloud.github.io/instants/terms.html" target="_blank" rel="noopener" style="color:inherit;">${t("conditions d'utilisation")}</a> ${t("et la")} <a href="https://augustinpiq-cloud.github.io/instants/privacy-policy.html" target="_blank" rel="noopener" style="color:inherit;">${t("politique de confidentialité")}</a>.
+          </p>
           ${pendingJoinCode ? `<p class="helper-text" style="color:var(--teal);">${icon("key",14)} ${t("Tu as été invité·e à rejoindre un groupe — connecte-toi ou crée un compte pour y accéder directement.")}</p>` : ""}
         </div>
       </div>
@@ -1502,6 +1790,14 @@ function renderSignupForm(){
       <div class="color-picker" id="color-picker">
         ${PALETTE.map(c => `<span class="color-swatch ${c===selectedColor?'selected':''}" data-color="${c}" style="background:${c}"></span>`).join("")}
       </div>
+    </div>
+    <div class="field">
+      <label>${t("Date de naissance (facultatif)")}</label>
+      <div style="display:flex; gap:8px;">
+        <select id="signup-bday">${dayOptions(signupBirthDay)}</select>
+        <select id="signup-bmonth">${monthOptions(signupBirthMonth)}</select>
+      </div>
+      <p class="helper-text" style="margin-top:6px;">${t("Jour et mois seulement, pour que ton groupe pense à ton anniversaire 🎂")}</p>
     </div>
     <div class="field">
       <label>${t("Photo de profil (facultatif)")}</label>
@@ -1632,6 +1928,8 @@ function bindAuth(){
     document.querySelectorAll(".color-swatch").forEach(sw=>{
       sw.addEventListener("click", ()=>{ selectedColor = sw.dataset.color; render(); });
     });
+    document.getElementById("signup-bday").addEventListener("change", e => { signupBirthDay = e.target.value; });
+    document.getElementById("signup-bmonth").addEventListener("change", e => { signupBirthMonth = e.target.value; });
     document.getElementById("signup-avatar-zone").addEventListener("click", ()=>{
       pendingAvatarTarget = "signup";
       document.getElementById("avatar-file").click();
@@ -1642,6 +1940,9 @@ function bindAuth(){
       const email = document.getElementById("signup-email").value.trim();
       const password = document.getElementById("signup-password").value;
       const confirm = document.getElementById("signup-password-confirm").value;
+      const bDay = Number(document.getElementById("signup-bday").value) || null;
+      const bMonth = Number(document.getElementById("signup-bmonth").value) || null;
+      if((bDay && !bMonth) || (!bDay && bMonth) || (bDay && !isRealDate(bDay, bMonth))){ setError(t("Choisis une date de naissance valide (jour et mois), ou laisse les deux vides.")); return; }
       if(!name){ setError(t("Entre ton prénom.")); return; }
       if(!isValidEmail(email)){ setError(t("Entre un email valide.")); return; }
       if(!isStrongPassword(password)){ setError(t("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial.")); return; }
@@ -1649,7 +1950,7 @@ function bindAuth(){
       btn.disabled = true; btn.textContent = t("Création…");
       const { data, error } = await sb.auth.signUp({
         email, password,
-        options: { data: { display_name: name, avatar_color: selectedColor, avatar_photo: signupPhoto || null, lang: signupLang } }
+        options: { data: { display_name: name, avatar_color: selectedColor, avatar_photo: signupPhoto || null, lang: signupLang, birth_day: bDay, birth_month: bMonth } }
       });
       if(error){
         btn.disabled = false; btn.textContent = t("Créer mon compte");
@@ -1663,12 +1964,12 @@ function bindAuth(){
       // using the display_name/avatar_color/avatar_photo/lang metadata stashed above —
       // see buildCurrentUser().
       if(userId && data.session){
-        await upsertProfile(userId, { displayName: name, avatarColor: selectedColor, avatarPhoto: signupPhoto || null, lang: signupLang });
+        await upsertProfile(userId, { displayName: name, avatarColor: selectedColor, avatarPhoto: signupPhoto || null, lang: signupLang, birthDay: bDay, birthMonth: bMonth });
       }
       btn.disabled = false; btn.textContent = t("Créer mon compte");
       if(data.session){
         currentUser = await buildCurrentUser(data.user);
-        signupPhoto = null;
+        signupPhoto = null; signupBirthDay = ""; signupBirthMonth = "";
         tryPendingJoin();
       } else {
         showToast(t("Compte créé — vérifie ta boîte mail pour confirmer, puis connecte-toi 📬"));
@@ -1836,7 +2137,10 @@ function renderProfileScreen(){
           <div class="list-row" id="edit-profile-btn"><span>${icon("pencil",16)}</span> ${t("Modifier mon profil")}</div>
           <div class="list-row" id="push-toggle-btn"><span>${icon("bell",16)}</span> <span id="push-toggle-label">${t("Notifications")}</span></div>
           <div class="list-row" id="install-help-btn"><span>${icon("smartphone",16)}</span> ${t("Comment installer l'appli ?")}</div>
+          <div class="list-row" id="terms-btn"><span>${icon("book",16)}</span> ${t("Conditions d'utilisation")}</div>
+          <div class="list-row" id="privacy-btn"><span>${icon("book",16)}</span> ${t("Politique de confidentialité")}</div>
           <div class="list-row" id="logout-btn"><span>${icon("logout",16)}</span> <span class="danger" style="color:var(--danger)">${t("Se déconnecter")}</span></div>
+          <div class="list-row" id="delete-account-btn"><span>${icon("trash",16)}</span> <span class="danger" style="color:var(--danger)">${t("Supprimer mon compte")}</span></div>
         </div>
         <div class="lang-select" id="profile-lang-select" style="margin-top:26px;">
           <button type="button" class="lang-select-btn" id="profile-lang-btn"><span>${flags[currentLang]}</span><span class="lang-select-caret">▾</span></button>
@@ -1894,10 +2198,18 @@ function bindProfile(){
   document.getElementById("install-help-btn").addEventListener("click", ()=>{
     modalType = "installHelp"; renderOverlay(); openOverlay();
   });
+  document.getElementById("terms-btn").addEventListener("click", ()=>{
+    window.open("https://augustinpiq-cloud.github.io/instants/terms.html", "_blank");
+  });
+  document.getElementById("privacy-btn").addEventListener("click", ()=>{
+    window.open("https://augustinpiq-cloud.github.io/instants/privacy-policy.html", "_blank");
+  });
+  document.getElementById("delete-account-btn").addEventListener("click", deleteMyAccount);
   document.getElementById("logout-btn").addEventListener("click", async ()=>{
     if("clearAppBadge" in navigator){ navigator.clearAppBadge().catch(()=>{}); }
     await sb.auth.signOut();
     currentUser = null;
+    blockedIds = new Set(); blockedLoaded = false;
     seenMap = {};
     authMode = "login";
     screen = "login";
@@ -2020,12 +2332,10 @@ function renderGroupScreen(){
     <div class="app-header">
       <button class="icon-btn" id="back-btn">←</button>
       <h2>${escapeHtml(group.name)}</h2>
+      <button class="icon-btn ${activeView==='calendrier'?'active':''}" data-view-btn="calendrier" title="${t("Calendrier")}">${icon("calendar",18)}</button>
+      <button class="icon-btn ${activeView==='anniversaires'?'active':''} ${hasBirthdayToday(group.id)?'has-dot':''}" id="bd-header-btn" data-view-btn="anniversaires" title="${t("Anniversaires")}"><span class="emoji-ic">🎂</span></button>
       <button class="icon-btn" id="invite-btn" title="${t("Inviter")}">${icon("key",18)}</button>
-      <button class="icon-btn" id="book-btn" title="${t("Livre de l'année")}">${icon("bookOpen",18)}</button>
-    </div>
-    <div class="segmented">
-      <button class="seg-btn ${activeView==='fil'?'active':''}" data-view="fil">${t("Fil")}</button>
-      <button class="seg-btn ${activeView==='calendrier'?'active':''}" data-view="calendrier">${t("Calendrier")}</button>
+      <button class="icon-btn ${activeView==='livre'?'active':''}" data-view-btn="livre" title="${t("Livre de l'année")}">${icon("bookOpen",18)}</button>
     </div>
     <div class="screen" id="group-scroll">
       <div class="pull-indicator" id="pull-indicator"><div class="spinner-sm"></div></div>
@@ -2036,7 +2346,15 @@ function renderGroupScreen(){
     <button class="fab" id="fab-add">+</button>
   `;
 }
+function hasBirthdayToday(groupId){
+  try{ return getBirthdayPeople(groupId).some(isBirthdayToday); }catch(e){ return false; }
+}
+function renderHeaderDot(){
+  const b = document.getElementById("bd-header-btn");
+  if(b && activeGroupId) b.classList.toggle("has-dot", hasBirthdayToday(activeGroupId));
+}
 function renderGroupBody(group, posts){
+  if(activeView === "anniversaires") return renderBirthdaysView(group);
   if(activeView === "livre") return renderBook(group, posts);
   if(activeView === "calendrier") return renderCalendar(group, posts);
   return renderFeed(group, posts);
@@ -2080,7 +2398,9 @@ function renderStoryBar(storyMonths){
 function renderFeed(group, posts){
   const sorted = [...posts].sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
   storyMonthsGlobal = buildStoryMonths(posts);
+  const todayBd = getBirthdayPeople(group.id).filter(isBirthdayToday);
   return `
+    ${todayBd.length ? `<div class="bd-banner" data-goto-view="anniversaires"><span style="font-size:20px;">🎂</span><span>${lang()==="en" ? "Today: birthday of " : "Aujourd'hui : anniversaire de "}<strong>${todayBd.map(p=>escapeHtml(p.firstName)).join(", ")}</strong></span></div>` : ""}
     ${renderStoryBar(storyMonthsGlobal)}
     ${sorted.length === 0 ? `
       <div class="empty-state">
@@ -2127,6 +2447,7 @@ const ICONS = {
   wrench: '<path d="M14.5 6.5a4 4 0 0 0-5.4 4.9L4 16.5V20h3.5l5-5.1a4 4 0 0 0 4.9-5.4l-2.6 2.6-2-2 2.7-2.6Z"/>',
   logout: '<path d="M9 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H9"/><path d="M14 8l4 4-4 4"/><path d="M18 12H9"/>',
   calendar: '<rect x="3.5" y="5" width="17" height="16" rx="2"/><path d="M3.5 10h17"/><path d="M8 3v4"/><path d="M16 3v4"/>',
+  flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
   trash: '<path d="M5 7h14"/><path d="M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7"/><path d="M6.5 7l1 12.5a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1L17.5 7"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z"/>',
   link: '<path d="M9.5 14.5l5-5"/><path d="M11 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/>'
@@ -2208,6 +2529,8 @@ function renderMonthView(group, posts){
 
   const leading = firstWeekdayMon(year, month);
   const total = daysInMonth(year, month);
+  const bdByDay = {};
+  getBirthdayPeople(group.id).forEach(p => { if(p.month === month+1) bdByDay[p.day] = true; });
   let cells = "";
   for(let i=0;i<leading;i++){ cells += `<div class="day-cell-lg empty"></div>`; }
   for(let d=1; d<=total; d++){
@@ -2221,10 +2544,11 @@ function renderMonthView(group, posts){
       cells += `
         <div class="day-cell-lg has-photo ${isToday?'is-today':''}" data-daydate="${dateStr}" style="background-image:url('${cover}'); background-position:${coverStyle.replace('object-position:','') || '50% 50%'}">
           <span class="day-num">${d}</span>
+          ${bdByDay[d] ? `<span class="day-cake">🎂</span>` : ""}
           ${dayPosts.length > 1 ? `<span class="day-count">${dayPosts.length}</span>` : ""}
         </div>`;
     } else {
-      cells += `<div class="day-cell-lg ${isToday?'is-today':''}" data-daydate="${dateStr}"><span class="day-num">${d}</span></div>`;
+      cells += `<div class="day-cell-lg ${isToday?'is-today':''}" data-daydate="${dateStr}"><span class="day-num">${d}</span>${bdByDay[d] ? `<span class="day-cake">🎂</span>` : ""}</div>`;
     }
   }
   const monthPostCount = Object.keys(byDate).filter(d => d.startsWith(`${year}-${String(month+1).padStart(2,"0")}`)).reduce((sum,k)=>sum+byDate[k].length,0);
@@ -2240,7 +2564,7 @@ function renderMonthView(group, posts){
     </div>
     <div class="dow-row">${dow().map(d=>`<span>${d}</span>`).join("")}</div>
     <div class="day-grid-lg">${cells}</div>
-    <div class="cal-legend"><span class="sw" style="background:var(--gold-soft)"></span> ${t("appuie sur un jour pour voir ses moments")}</div>
+    <div class="cal-legend"><span class="sw" style="background:var(--gold-soft)"></span> ${t("appuie sur un jour pour voir ses moments")} · 🎂 ${t("anniversaire")}</div>
   `;
 }
 function renderDayView(group, posts, dateStr){
@@ -2259,6 +2583,7 @@ function renderDayView(group, posts, dateStr){
       </div>
       <button class="icon-btn" style="color:var(--pine)" id="cal-next-day" ${isFuture ? "disabled" : ""}>›</button>
     </div>
+    ${(()=>{ const bds = birthdaysOnDay(group.id, d.getMonth()+1, d.getDate()); return bds.length ? `<div class="bd-banner" style="cursor:default;"><span style="font-size:20px;">🎂</span><span>${lang()==="en" ? "Birthday: " : "Anniversaire : "}<strong>${bds.map(p=>escapeHtml(birthdayFullName(p))).join(", ")}</strong></span></div>` : ""; })()}
     ${dayPosts.length === 0 ? `
       <div class="empty-state"><span class="big-emoji">${icon("calendar",40)}</span>${t("Aucun moment partagé ce jour-là.")}</div>
     ` : `
@@ -2287,6 +2612,190 @@ function renderDayView(group, posts, dateStr){
   `;
 }
 
+/* Birthdays tab */
+function renderBirthdaysView(group){
+  const people = getBirthdayPeople(group.id);
+  const todayPeople = people.filter(isBirthdayToday);
+  const stories = birthdayStoriesCache[group.id] || [];
+  const today = localTodayISO();
+  const groups = todayPeople.map(p => {
+    const frames = stories.filter(x => x.subject_key === p.key).map(x => ({
+      photo: { url: x.photoUrl, focusX: 50, focusY: 50 }, authorName: x.author_name || "?",
+      authorAvatarColor: x.author_avatar_color, authorAvatarPhoto: x.author_avatar_photo,
+      caption: x.message || "", createdAt: x.created_at, date: today
+    }));
+    return { key:p.key, label:"🎂 " + p.firstName, person:p, frames };
+  });
+  storyMonthsGlobal = groups.filter(g => g.frames.length);
+  const sorted = [...people].sort((a,b) => daysUntilBirthday(a.day,a.month) - daysUntilBirthday(b.day,b.month));
+
+  const circles = groups.map(g => {
+    const idx = storyMonthsGlobal.indexOf(g);
+    const last = g.frames.length ? g.frames[g.frames.length-1].photo : null;
+    const inner = last
+      ? `<img src="${last.url}" alt=""/>`
+      : (g.person.photo ? `<img src="${g.person.photo}" alt=""/>` : avatarHtml(g.person.firstName, g.person.color, null, "width:100%;height:100%;font-size:22px;"));
+    return `
+      <div class="story-circle ${last ? "" : "no-story"}" ${last ? `data-month-index="${idx}"` : `data-bd-empty="${g.key}"`}>
+        <div class="story-ring">${inner}</div>
+        <span class="story-label">🎂 ${escapeHtml(g.person.firstName)}</span>
+      </div>`;
+  }).join("");
+  const addButtons = todayPeople.filter(p => p.memberId !== currentUser.id).map(p => `
+    <button class="btn-secondary bd-add-story" data-bd-add-story="${p.key}">📸 ${lang()==="en" ? "Add a photo & message for " : "Ajouter une photo et un mot pour "}${escapeHtml(p.firstName)}</button>`).join("");
+
+  return `
+    ${todayPeople.length ? `
+      <div class="story-bar">${circles}</div>
+      ${addButtons}
+    ` : ""}
+    <p class="bd-section-title">${t("Anniversaires du groupe")}</p>
+    ${sorted.length === 0 ? `
+      <div class="empty-state"><span class="big-emoji">🎂</span>${t("Aucun anniversaire pour l'instant.")}<br/>${t("Appuie sur + pour en ajouter un.")}</div>
+    ` : sorted.map(p => {
+      const n = daysUntilBirthday(p.day, p.month);
+      const canDelete = p.entryId && p.createdBy === currentUser.id;
+      return `
+        <div class="bd-row ${n===0?"is-today":""}">
+          ${p.photo ? `<img src="${p.photo}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;"/>` : avatarHtml(p.firstName, p.color, null, "width:40px;height:40px;font-size:16px;")}
+          <div class="bd-info"><strong>${escapeHtml(birthdayFullName(p))}</strong><span>${birthdayDateLabel(p.day,p.month)} · ${birthdayCountdown(n)}</span></div>
+          ${canDelete ? `<button class="bd-del" data-bd-del="${p.entryId}" title="${t("Supprimer")}">✕</button>` : ""}
+        </div>`;
+    }).join("")}
+  `;
+}
+function renderAddBirthdaySheet(){
+  const g = getGroup(activeGroupId);
+  const profs = memberProfilesCache[g.id] || [];
+  const known = new Set(getBirthdayPeople(g.id).map(p => p.memberId).filter(Boolean));
+  const avail = profs.filter(m => !known.has(m.id));
+  return `
+    <div class="sheet-head">
+      <h4>${t("Ajouter un anniversaire")}</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-block" style="padding-top:16px;">
+        <div id="bd-error"></div>
+        <div class="field">
+          <label>${t("Date")}</label>
+          <div style="display:flex; gap:8px;">
+            <select id="bd-day">${dayOptions(newBd.day)}</select>
+            <select id="bd-month">${monthOptions(newBd.month)}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>${t("Pour qui ?")}</label>
+          <div class="tag-people-list">
+            <label class="tag-person-row"><input type="radio" name="bd-mode" value="member" ${newBd.mode==="member"?"checked":""}/> <span>${t("Un membre du groupe")}</span></label>
+            <label class="tag-person-row"><input type="radio" name="bd-mode" value="ext" ${newBd.mode==="ext"?"checked":""}/> <span>${t("Une personne hors du groupe")}</span></label>
+          </div>
+        </div>
+        ${newBd.mode === "member" ? `
+          <div class="field">
+            ${avail.length ? `
+              <select id="bd-member" style="width:100%;">
+                <option value="">${t("Choisis un membre")}</option>
+                ${avail.map(m => `<option value="${m.id}" ${newBd.memberId===m.id?"selected":""}>${escapeHtml(m.displayName)}${m.id===currentUser.id ? " ("+t("moi")+")" : ""}</option>`).join("")}
+              </select>` : `<p class="helper-text">${t("Tous les membres ont déjà un anniversaire enregistré.")}</p>`}
+          </div>
+        ` : `
+          <div class="field"><label>${t("Prénom")}</label><input type="text" id="bd-first" value="${escapeHtml(newBd.firstName)}" /></div>
+          <div class="field"><label>${t("Nom de famille (facultatif)")}</label><input type="text" id="bd-last" value="${escapeHtml(newBd.lastName)}" /></div>
+          <div class="field">
+            <label>${t("Photo (facultatif)")}</label>
+            <div class="avatar-upload-zone" id="bd-photo-zone">${newBd.photo ? `<img src="${newBd.photo}" alt=""/>` : `<span>${icon("camera",15)} ${t("Ajouter")}</span>`}</div>
+          </div>
+        `}
+        <button class="btn-primary" id="bd-save">${t("Enregistrer")}</button>
+      </div>
+    </div>
+  `;
+}
+function bindAddBirthdaySheet(){
+  document.getElementById("close-sheet").addEventListener("click", closeOverlay);
+  const g = getGroup(activeGroupId);
+  document.getElementById("bd-day").addEventListener("change", e => { newBd.day = e.target.value; });
+  document.getElementById("bd-month").addEventListener("change", e => { newBd.month = e.target.value; });
+  document.querySelectorAll("input[name=bd-mode]").forEach(r => r.addEventListener("change", ()=>{ newBd.mode = r.value; renderOverlay(); }));
+  const mem = document.getElementById("bd-member");
+  if(mem) mem.addEventListener("change", e => { newBd.memberId = e.target.value; });
+  const f = document.getElementById("bd-first"); if(f) f.addEventListener("input", e => { newBd.firstName = e.target.value; });
+  const l = document.getElementById("bd-last"); if(l) l.addEventListener("input", e => { newBd.lastName = e.target.value; });
+  const pz = document.getElementById("bd-photo-zone");
+  if(pz) pz.addEventListener("click", ()=>{ pendingAvatarTarget = "birthday"; document.getElementById("avatar-file").click(); });
+  document.getElementById("bd-save").addEventListener("click", async (e)=>{
+    const btn = e.currentTarget;
+    const setError = m => { document.getElementById("bd-error").innerHTML = m ? `<p class="form-error">${m}</p>` : ""; };
+    const day = Number(newBd.day), month = Number(newBd.month);
+    if(!day || !month || !isRealDate(day, month)){ setError(t("Choisis une date valide (jour et mois).")); return; }
+    if(newBd.mode === "member" && !newBd.memberId){ setError(t("Choisis un membre du groupe.")); return; }
+    if(newBd.mode === "ext" && !newBd.firstName.trim()){ setError(t("Entre un prénom.")); return; }
+    btn.disabled = true; btn.textContent = t("Enregistrement…");
+    const ok = await insertBirthday(g.id, {
+      memberId: newBd.mode === "member" ? newBd.memberId : null,
+      firstName: newBd.firstName.trim(), lastName: newBd.lastName.trim(),
+      photo: newBd.mode === "ext" ? newBd.photo : null, day, month
+    });
+    if(!ok){ btn.disabled = false; btn.textContent = t("Enregistrer"); return; }
+    await loadGroupBirthdays(g.id);
+    closeOverlay();
+    renderGroupContentOnly(); renderHeaderDot();
+    showToast(t("Anniversaire ajouté 🎂"));
+  });
+}
+function renderAddBirthdayStorySheet(){
+  return `
+    <div class="sheet-head">
+      <h4>🎂 ${escapeHtml(bdStory.name)}</h4>
+      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-block" style="padding-top:16px;">
+        <div class="photo-strip">
+          ${bdStory.photo ? `<div class="photo-thumb"><img src="${bdStory.photo}" alt=""/></div>` : ""}
+          <div class="photo-thumb-add" id="bstory-photo-zone"><span>${icon("camera",20)}</span><span style="font-size:10.5px;">${bdStory.photo ? t("Changer") : t("Choisir")}</span></div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>${t("Petit mot (facultatif)")}</label>
+          <input type="text" id="bstory-msg" maxlength="140" value="${escapeHtml(bdStory.message)}" placeholder="${t("Joyeux anniversaire !")}"/>
+        </div>
+        <button class="btn-primary" id="bstory-publish" ${bdStory.photo ? "" : "disabled"}>${t("Publier")}</button>
+      </div>
+    </div>
+  `;
+}
+function bindAddBirthdayStorySheet(){
+  document.getElementById("close-sheet").addEventListener("click", closeOverlay);
+  document.getElementById("bstory-photo-zone").addEventListener("click", ()=> document.getElementById("bstory-file").click());
+  document.getElementById("bstory-msg").addEventListener("input", e => { bdStory.message = e.target.value; });
+  document.getElementById("bstory-publish").addEventListener("click", async (e)=>{
+    const btn = e.currentTarget;
+    if(btn.disabled || !bdStory.photo) return;
+    btn.disabled = true; btn.textContent = t("Publication…");
+    const ok = await insertBirthdayStory(bdStory.groupId, bdStory.key, bdStory.photo, bdStory.message.trim());
+    if(!ok){ btn.disabled = false; btn.textContent = t("Publier"); return; }
+    await loadGroupBirthdays(bdStory.groupId);
+    closeOverlay();
+    renderGroupContentOnly();
+    showToast(t("Ajouté à la story d'anniversaire 🎉"));
+  });
+}
+function openBirthdayStorySheet(key){
+  const g = getGroup(activeGroupId);
+  const p = getBirthdayPeople(g.id).find(x => x.key === key);
+  if(!p) return;
+  bdStory = { groupId: g.id, key, name: p.firstName, photo: null, message: "" };
+  modalType = "addBirthdayStory"; renderOverlay(); openOverlay();
+}
+document.getElementById("bstory-file").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  e.target.value = "";
+  if(!file || !bdStory) return;
+  try{ bdStory.photo = await compressImage(file, 1600, 0.85); }catch(err){ showToast(t("⚠️ Action impossible pour l'instant.")); return; }
+  if(modalType === "addBirthdayStory") renderOverlay();
+});
+
 /* Book */
 function renderBook(group, posts){
   const favorites = posts.filter(p => p.favorite);
@@ -2312,19 +2821,26 @@ function renderBook(group, posts){
 }
 
 function bindGroupScreen(){
-  document.getElementById("back-btn").addEventListener("click", ()=>{ screen="home"; render(); });
+  document.getElementById("back-btn").addEventListener("click", ()=>{
+    if(activeView !== "fil"){ activeView = "fil"; render(); return; }
+    screen="home"; render();
+  });
   document.getElementById("invite-btn").addEventListener("click", ()=>{ modalType="invite"; renderOverlay(); openOverlay(); });
-  document.getElementById("book-btn").addEventListener("click", ()=>{ activeView="livre"; renderGroupContentOnly(); });
-  document.querySelectorAll(".seg-btn").forEach(btn=>{
+  document.querySelectorAll("[data-view-btn]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
-      activeView = btn.dataset.view;
+      const v = btn.dataset.viewBtn;
+      activeView = (activeView === v) ? "fil" : v;   // tapping the active icon goes back to the feed
       if(activeView === "calendrier"){ calendarMonthCursor = null; calendarViewDate = null; }
-      document.querySelectorAll(".seg-btn").forEach(b=>b.classList.toggle("active", b===btn));
-      renderGroupContentOnly();
+      render();
     });
   });
   document.getElementById("fab-add").addEventListener("click", async ()=>{
-    newPostPhotos = []; newPostFavorite = false; newPostTaggedIds = []; newPostLocation = "";
+    if(activeView === "anniversaires"){
+      newBd = { mode:"member", memberId:"", firstName:"", lastName:"", photo:null, day:"", month:"" };
+      modalType = "addBirthday"; renderOverlay(); openOverlay();
+      return;
+    }
+    newPostPhotos = []; newPostFavorite = false; newPostTaggedIds = []; newPostLocation = ""; newPostExtraGroupIds = [];
     modalType = "addPost"; renderOverlay(); openOverlay();
     if(!memberProfilesCache[activeGroupId]){
       await loadGroupMemberProfiles(activeGroupId);
@@ -2392,6 +2908,25 @@ function attachContentHandlers(){
   bindCarousels();
   document.querySelectorAll("[data-month-index]").forEach(el=>{
     el.addEventListener("click", ()=> openStoryViewer(Number(el.dataset.monthIndex), 0));
+  });
+  document.querySelectorAll("[data-goto-view]").forEach(el=>{
+    el.addEventListener("click", ()=>{ activeView = el.dataset.gotoView; render(); });
+  });
+  document.querySelectorAll("[data-bd-add-story]").forEach(el=>{
+    el.addEventListener("click", ()=> openBirthdayStorySheet(el.dataset.bdAddStory));
+  });
+  document.querySelectorAll("[data-bd-empty]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const p = getBirthdayPeople(activeGroupId).find(x => x.key === el.dataset.bdEmpty);
+      if(p && p.memberId !== currentUser.id) openBirthdayStorySheet(p.key);
+      else showToast(t("Les autres membres peuvent y ajouter des photos 🎉"));
+    });
+  });
+  document.querySelectorAll("[data-bd-del]").forEach(el=>{
+    el.addEventListener("click", async ()=>{
+      if(!confirm(t("Supprimer cet anniversaire ?"))) return;
+      if(await deleteBirthday(el.dataset.bdDel)){ await loadGroupBirthdays(activeGroupId); renderGroupContentOnly(); renderHeaderDot(); }
+    });
   });
   const orderBtn = document.getElementById("order-book");
   if(orderBtn){ orderBtn.addEventListener("click", ()=> showToast(t("Cette fonctionnalité est en cours de développement 🚧"))); }
@@ -2628,6 +3163,8 @@ function renderOverlay(){
   else if(modalType === "invite") { sheet.innerHTML = renderInviteSheet(); bindInviteSheet(); }
   else if(modalType === "installHelp") { sheet.innerHTML = renderInstallHelpSheet(); bindInstallHelpSheet(); }
   else if(modalType === "editProfile") { sheet.innerHTML = renderEditProfileSheet(); bindEditProfileSheet(); }
+  else if(modalType === "addBirthday") { sheet.innerHTML = renderAddBirthdaySheet(); bindAddBirthdaySheet(); }
+  else if(modalType === "addBirthdayStory") { sheet.innerHTML = renderAddBirthdayStorySheet(); bindAddBirthdayStorySheet(); }
   else if(modalType === "adjustCrop") { sheet.innerHTML = renderAdjustCropSheet(); bindAdjustCropSheet(); }
   else if(modalType === "adjustNewPhotoCrop") { sheet.innerHTML = renderAdjustNewPhotoCropSheet(); bindAdjustNewPhotoCropSheet(); }
 }
@@ -2799,6 +3336,13 @@ function renderEditProfileSheet(){
           </div>
         </div>
         <div class="field">
+          <label>${t("Date de naissance (facultatif)")}</label>
+          <div style="display:flex; gap:8px;">
+            <select id="edit-bday">${dayOptions(currentUser.birthDay || "")}</select>
+            <select id="edit-bmonth">${monthOptions(currentUser.birthMonth || "")}</select>
+          </div>
+        </div>
+        <div class="field">
           <label>${t("Email")}</label>
           <input type="email" id="edit-email" value="${escapeHtml(currentUser.email)}" />
         </div>
@@ -2838,6 +3382,9 @@ function bindEditProfileSheet(){
     const name = document.getElementById("edit-name").value.trim();
     const email = document.getElementById("edit-email").value.trim();
     const password = document.getElementById("edit-password").value;
+    const eDay = Number(document.getElementById("edit-bday").value) || null;
+    const eMonth = Number(document.getElementById("edit-bmonth").value) || null;
+    if((eDay && !eMonth) || (!eDay && eMonth) || (eDay && !isRealDate(eDay, eMonth))){ setError(t("Choisis une date de naissance valide (jour et mois), ou laisse les deux vides.")); return; }
     if(!name){ setError(t("Entre ton prénom.")); return; }
     if(!isValidEmail(email)){ setError(t("Entre un email valide.")); return; }
     if(password && !isStrongPassword(password)){ setError(t("Le mot de passe doit faire au moins 8 caractères, avec une majuscule et un caractère spécial.")); return; }
@@ -2855,12 +3402,14 @@ function bindEditProfileSheet(){
       }
     }
     const finalPhoto = editProfilePhoto !== undefined ? editProfilePhoto : currentUser.avatarPhoto;
-    await upsertProfile(currentUser.id, { displayName: name, avatarColor: selectedColor, avatarPhoto: finalPhoto });
+    const savedOk = await upsertProfile(currentUser.id, { displayName: name, avatarColor: selectedColor, avatarPhoto: finalPhoto, birthDay: eDay, birthMonth: eMonth });
     await syncAuthorInfoEverywhere(currentUser.id, name, selectedColor, finalPhoto);
     postsCache = {}; // stale author snapshots may be cached locally — force a fresh reload on next visit
     currentUser.displayName = name;
     currentUser.avatarColor = selectedColor;
     currentUser.avatarPhoto = finalPhoto;
+    if(savedOk){ currentUser.birthDay = eDay; currentUser.birthMonth = eMonth; }
+    memberProfilesCache = {};
     if(authUpdates.email) showToast(t("Vérifie ta nouvelle boîte mail pour confirmer le changement d'adresse 📬"));
     else showToast(t("Profil mis à jour partout ✅"));
     editProfilePhoto = undefined;
@@ -2926,7 +3475,7 @@ function renderPostDetailSheet(){
     <div class="sheet-head">
       ${avatarHtml(post.authorName, post.authorAvatarColor, post.authorAvatarPhoto, "width:30px;height:30px;font-size:12px;")}
       <h4>${escapeHtml(post.authorName)} · ${formatDateShort(post.date)} · ${formatTime(post.createdAt)}</h4>
-      ${isAuthor ? `<button class="icon-btn" style="color:var(--ink)" id="edit-post-btn" title="${t("Modifier")}">${postEditMode ? "✕" : icon("pencil",16)}</button>` : ""}
+      ${isAuthor ? `<button class="icon-btn" style="color:var(--ink)" id="edit-post-btn" title="${t("Modifier")}">${postEditMode ? "✕" : icon("pencil",16)}</button>` : `<button class="icon-btn" style="color:var(--ink)" id="report-post-btn" title="${t("Signaler ou bloquer")}" aria-label="${t("Signaler ou bloquer")}">${icon("flag",16)}</button>`}
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
@@ -2972,7 +3521,7 @@ function renderPostDetailSheet(){
           return `
             <div class="comment">
               <span class="cname">${escapeHtml(c.author)}</span>${escapeHtml(c.text)}
-              ${mine ? `<button class="edit-comment-btn" data-comment="${c.id}" title="${t("Modifier")}">${icon("pencil",13)}</button>` : ""}
+              ${mine ? `<button class="edit-comment-btn" data-comment="${c.id}" title="${t("Modifier")}">${icon("pencil",13)}</button>` : `<button class="report-comment-btn" data-comment="${c.id}" data-author="${c.authorId}" data-name="${escapeHtml(c.author)}" title="${t("Signaler ou bloquer")}" aria-label="${t("Signaler ou bloquer")}">${icon("flag",13)}</button>`}
             </div>
           `;
         }).join("") || `<div class="comment" style="color:var(--ink-soft)">${t("Aucun commentaire pour l'instant.")}</div>`}
@@ -3077,6 +3626,19 @@ function bindPostDetailSheet(){
       showToast(t("Photo supprimée"));
     });
   }
+
+  // Report / block (App Store guideline 1.2): any member can flag a photo or comment and block its author.
+  const reportPostBtn = document.getElementById("report-post-btn");
+  if(reportPostBtn){
+    reportPostBtn.addEventListener("click", ()=>{
+      moderateContent({ postId: post.id, authorId: post.authorUsername, authorName: post.authorName });
+    });
+  }
+  document.querySelectorAll(".report-comment-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      moderateContent({ postId: post.id, commentId: btn.dataset.comment, authorId: btn.dataset.author, authorName: btn.dataset.name });
+    });
+  });
 
   // Comment author can edit their own comment inline.
   document.querySelectorAll(".edit-comment-btn").forEach(btn=>{
@@ -3184,11 +3746,15 @@ document.getElementById("avatar-file").addEventListener("change", async (e)=>{
   } else if(pendingAvatarTarget === "editProfile"){
     editProfilePhoto = dataUrl;
     renderOverlay();
+  } else if(pendingAvatarTarget === "birthday"){
+    if(newBd) newBd.photo = dataUrl;
+    if(modalType === "addBirthday") renderOverlay();
   }
   pendingAvatarTarget = null;
 });
 
 function renderAddPostSheet(){
+  const otherGroups = myGroups().filter(g => g.id !== activeGroupId);
   const members = (memberProfilesCache[activeGroupId] || []).filter(m => m.id !== currentUser.id);
   return `
     <div class="sheet-head">
@@ -3230,6 +3796,19 @@ function renderAddPostSheet(){
                   <input type="checkbox" class="tag-person-checkbox" value="${m.id}" ${newPostTaggedIds.includes(m.id) ? "checked":""}/>
                   ${avatarHtml(m.displayName, m.avatarColor, m.avatarPhoto, "width:24px;height:24px;font-size:10px;")}
                   <span>${escapeHtml(m.displayName)}</span>
+                </label>
+              `).join("")}
+            </div>
+          </div>
+        ` : ""}
+        ${otherGroups.length ? `
+          <div class="field">
+            <label>${t("Publier aussi dans d'autres carnets")}</label>
+            <div class="tag-people-list">
+              ${otherGroups.map(g => `
+                <label class="tag-person-row">
+                  <input type="checkbox" class="extra-group-checkbox" value="${g.id}" ${newPostExtraGroupIds.includes(g.id) ? "checked":""}/>
+                  <span>${escapeHtml(g.name)}</span>
                 </label>
               `).join("")}
             </div>
@@ -3282,6 +3861,12 @@ function bindAddPostSheet(){
       renderOverlay();
     }, ()=>{ btn.innerHTML = icon("pin",16); showToast(t("Localisation refusée ou indisponible.")); }, { timeout: 8000 });
   });
+  document.querySelectorAll(".extra-group-checkbox").forEach(cb=>{
+    cb.addEventListener("change", ()=>{
+      if(cb.checked){ if(!newPostExtraGroupIds.includes(cb.value)) newPostExtraGroupIds.push(cb.value); }
+      else { newPostExtraGroupIds = newPostExtraGroupIds.filter(id => id !== cb.value); }
+    });
+  });
   document.querySelectorAll(".tag-person-checkbox").forEach(cb=>{
     cb.addEventListener("change", ()=>{
       if(cb.checked){ if(!newPostTaggedIds.includes(cb.value)) newPostTaggedIds.push(cb.value); }
@@ -3301,12 +3886,20 @@ function bindAddPostSheet(){
       location: newPostLocation.trim(), taggedIds: newPostTaggedIds
     };
     await insertPost(group.id, post);
+    // Same post in the other notebooks the author ticked (one copy per notebook)
+    let extraOk = 0;
+    for(const gid of newPostExtraGroupIds){
+      const other = getGroup(gid);
+      if(!other || !other.memberUsernames.includes(currentUser.id)) continue;
+      const ok = await insertPost(gid, { ...post, taggedIds: (post.taggedIds || []).filter(uid => other.memberUsernames.includes(uid)) });
+      if(ok){ extraOk++; delete postsCache[gid]; }
+    }
     await loadGroupPosts(group.id);
     await markGroupSeen(group.id);
     updateAppBadge();
     closeOverlay();
     renderGroupContentOnly();
-    showToast(t("Photo publiée 🎉"));
+    showToast(extraOk ? (lang()==="en" ? `Photo published in ${extraOk + 1} notebooks 🎉` : `Photo publiée dans ${extraOk + 1} carnets 🎉`) : t("Photo publiée 🎉"));
   });
 }
 document.getElementById("hidden-file").addEventListener("change", async (e)=>{

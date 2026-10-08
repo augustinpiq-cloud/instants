@@ -2281,9 +2281,8 @@ function bindCreateGroup(){
     activeView = "fil";
     screen = "group";
     render();
-    modalType = "invite";
-    renderOverlay();
-    openOverlay();
+    activeView = "partage";
+    render();
   });
 }
 
@@ -2343,7 +2342,7 @@ function renderGroupScreen(){
       <div class="hdr-actions">
         <button class="icon-btn ${activeView==='calendrier'?'active':''}" data-view-btn="calendrier" title="${t("Calendrier")}">${icon("calendar",20)}</button>
         <button class="icon-btn ${activeView==='anniversaires'?'active':''} ${hasBirthdayToday(group.id)?'has-dot':''}" id="bd-header-btn" data-view-btn="anniversaires" title="${t("Anniversaires")}">${icon("cake",20)}</button>
-        <button class="icon-btn" id="invite-btn" title="${t("Inviter")}">${icon("key",20)}</button>
+        <button class="icon-btn ${activeView==='partage'?'active':''}" data-view-btn="partage" title="${t("Inviter")}">${icon("key",20)}</button>
         <button class="icon-btn ${activeView==='livre'?'active':''}" data-view-btn="livre" title="${t("Livre de l'année")}">${icon("bookOpen",20)}</button>
       </div>
     </div>
@@ -2364,6 +2363,7 @@ function renderHeaderDot(){
   if(b && activeGroupId) b.classList.toggle("has-dot", hasBirthdayToday(activeGroupId));
 }
 function renderGroupBody(group, posts){
+  if(activeView === "partage") return renderInviteView(group);
   if(activeView === "anniversaires") return renderBirthdaysView(group);
   if(activeView === "livre") return renderBook(group, posts);
   if(activeView === "calendrier") return renderCalendar(group, posts);
@@ -2443,7 +2443,7 @@ function renderFeed(group, posts){
   `;
 }
 const ICONS = {
-  cake: '<path d="M4 20.5h16"/><path d="M5 20.5v-6a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v6"/><path d="M5 17c1.5 1 2.5 1 3.5 0s2.5-1 3.5 0 2.5 1 3.5 0 2.5-1 3.5 0"/><path d="M12 13.5V10"/><path d="M12 5.5c1 1.2 1 2.2 0 3-1-.8-1-1.8 0-3Z"/>',
+  cake: '<path d="M3.5 21h17"/><path d="M5 21v-6.5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2V21"/><path d="M5 16.8c1.2 1.1 2.4 1.1 3.6 0s2.4-1.1 3.4 0 2.4 1.1 3.6 0 2.4-1.1 3.4 0"/><path d="M8.5 12.5V9.5M12 12.5V8.5M15.5 12.5V9.5"/><path d="M8.5 6.6v.02M12 5.6v.02M15.5 6.6v.02" stroke-width="2.6"/>',
   camera: '<path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.2"/>',
   pin: '<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.3"/>',
   smartphone: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
@@ -2842,7 +2842,6 @@ function bindGroupScreen(){
     if(activeView !== "fil"){ activeView = "fil"; render(); return; }
     screen="home"; render();
   });
-  document.getElementById("invite-btn").addEventListener("click", ()=>{ modalType="invite"; renderOverlay(); openOverlay(); });
   document.querySelectorAll("[data-view-btn]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const v = btn.dataset.viewBtn;
@@ -2923,6 +2922,7 @@ function renderGroupContentOnly(){
 }
 function attachContentHandlers(){
   bindCarousels();
+  bindInviteView();
   document.querySelectorAll("[data-month-index]").forEach(el=>{
     el.addEventListener("click", ()=> openStoryViewer(Number(el.dataset.monthIndex), 0));
   });
@@ -3175,10 +3175,8 @@ document.getElementById("lightbox-next").addEventListener("click", ()=>{
 
 function renderOverlay(){
   const sheet = document.getElementById("modal-sheet");
-  sheet.classList.toggle("full", modalType === "invite");
   if(modalType === "postDetail") { sheet.innerHTML = renderPostDetailSheet(); bindPostDetailSheet(); }
   else if(modalType === "addPost") { sheet.innerHTML = renderAddPostSheet(); bindAddPostSheet(); }
-  else if(modalType === "invite") { sheet.innerHTML = renderInviteSheet(); bindInviteSheet(); }
   else if(modalType === "installHelp") { sheet.innerHTML = renderInstallHelpSheet(); bindInstallHelpSheet(); }
   else if(modalType === "editProfile") { sheet.innerHTML = renderEditProfileSheet(); bindEditProfileSheet(); }
   else if(modalType === "addBirthday") { sheet.innerHTML = renderAddBirthdaySheet(); bindAddBirthdaySheet(); }
@@ -3941,28 +3939,23 @@ document.getElementById("hidden-file").addEventListener("change", async (e)=>{
 function inviteLink(group){
   return window.location.origin + window.location.pathname + "?code=" + group.joinCode;
 }
-function renderInviteSheet(){
-  const group = getGroup(activeGroupId);
+function renderInviteView(group){
   return `
-    <div class="sheet-head">
-      <h4>${t("Inviter dans")} ${escapeHtml(group.name)}</h4>
-      <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
-    </div>
-    <div class="sheet-body">
-      <p style="padding:16px 18px 0; font-size:13.5px; color:var(--ink-soft); line-height:1.5;">${t("Le plus simple : envoie le lien ci-dessous par SMS ou WhatsApp. Tes amis appuient dessus, créent leur compte, et rejoignent le groupe automatiquement — sans rien taper.")}</p>
-      <div class="form-block" style="padding-top:16px;">
-        <button class="btn-primary" id="share-link">${icon("link",15)} ${t("Partager le lien d'invitation")}</button>
-        <p class="section-label" style="margin-top:22px;">${t("Ou avec le code")}</p>
-        <div class="invite-code" style="margin:0; padding:16px;">${group.joinCode}</div>
-        <button class="btn-secondary" id="copy-code" style="margin-top:10px;">${t("Copier juste le code")}</button>
-      </div>
+    <div style="padding:6px 4px 24px;">
+      <h3 style="font-family:'Poppins',sans-serif; font-size:19px; margin:4px 0 8px;">${t("Inviter dans")} ${escapeHtml(group.name)}</h3>
+      <p style="font-size:13.5px; color:var(--ink-soft); line-height:1.5; margin:0 0 16px;">${t("Le plus simple : envoie le lien ci-dessous par SMS ou WhatsApp. Tes amis appuient dessus, créent leur compte, et rejoignent le groupe automatiquement — sans rien taper.")}</p>
+      <button class="btn-primary" id="share-link">${icon("link",15)} ${t("Partager le lien d'invitation")}</button>
+      <p class="section-label" style="margin-top:22px;">${t("Ou avec le code")}</p>
+      <div class="invite-code" style="margin:0; padding:16px;">${group.joinCode}</div>
+      <button class="btn-secondary" id="copy-code" style="margin-top:10px;">${t("Copier juste le code")}</button>
     </div>
   `;
 }
-function bindInviteSheet(){
-  document.getElementById("close-sheet").addEventListener("click", closeOverlay);
+function bindInviteView(){
   const group = getGroup(activeGroupId);
-  document.getElementById("share-link").addEventListener("click", async ()=>{
+  const share = document.getElementById("share-link");
+  if(!share || !group) return;
+  share.addEventListener("click", async ()=>{
     const link = inviteLink(group);
     if(navigator.share){
       try{ await navigator.share({ title: t("Rejoins") + " " + group.name + " " + t("sur A Wyle"), url: link }); }

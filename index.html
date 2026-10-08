@@ -89,7 +89,7 @@
   }
   .field input:focus{ border-color:var(--teal); }
   .field select{
-    border:1px solid var(--line); border-radius:10px; padding:11px 10px; font-size:14.5px; outline:none; background:#fff; flex:1; min-width:0; color:var(--ink);
+    border:1px solid var(--line); border-radius:10px; padding:11px 10px; font-size:14.5px; outline:none; background:#fff; flex:1; min-width:0; color:var(--ink); box-sizing:border-box; text-align:left; text-align-last:left;
   }
   .pin-row{ display:flex; gap:8px; }
   .pin-row input{ text-align:center; letter-spacing:2px; }
@@ -373,6 +373,14 @@
   }
   .crop-thumb-active{ box-shadow:0 0 0 2px var(--gold); }
 
+  .pan-frame{ position:relative; margin:12px 18px 0; aspect-ratio:4/3; border-radius:12px; overflow:hidden; background:var(--paper-dim); touch-action:none; cursor:grab; user-select:none; -webkit-user-select:none; }
+  .pan-frame.dragging{ cursor:grabbing; }
+  .pan-frame img{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; -webkit-user-drag:none; }
+  .pan-frame::after{ content:""; position:absolute; inset:0; pointer-events:none; background:
+    linear-gradient(to right, transparent 33.2%, rgba(255,255,255,0.45) 33.3%, transparent 33.5%, transparent 66.5%, rgba(255,255,255,0.45) 66.6%, transparent 66.8%),
+    linear-gradient(to bottom, transparent 33.2%, rgba(255,255,255,0.45) 33.3%, transparent 33.5%, transparent 66.5%, rgba(255,255,255,0.45) 66.6%, transparent 66.8%); opacity:0; transition:opacity .15s; }
+  .pan-frame.dragging::after{ opacity:1; }
+  .pan-frame.round{ width:260px; max-width:calc(100% - 36px); aspect-ratio:1; border-radius:50%; margin:14px auto 0; }
   .crop-preview{ margin:8px 18px 0; aspect-ratio:4/3; border-radius:12px; overflow:hidden; background:var(--paper-dim); }
   .crop-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
   .crop-full-wrap{
@@ -737,6 +745,7 @@ function dow(){ return lang() === "en" ? DOW_EN : DOW_FR; }
 function dateLocale(){ return lang() === "en" ? "en-GB" : "fr-FR"; }
 
 const I18N_EN = {
+  "Fais glisser la photo pour choisir ce qui est affiché": "Drag the photo to choose what is shown",
   "demain": "tomorrow",
   "Recadrer": "Crop",
   "Aperçu": "Preview",
@@ -2713,14 +2722,9 @@ function renderAdjustBdPhotoSheet(){
       <button class="icon-btn" style="color:var(--ink)" id="close-sheet">✕</button>
     </div>
     <div class="sheet-body">
-      <p class="section-label" style="padding:14px 18px 0;">${t("Aperçu")}</p>
-      <div class="crop-preview" style="width:120px; height:120px; aspect-ratio:1; border-radius:50%; overflow:hidden; margin:10px auto 0;">
-        <img src="${newBd.photoSrc}" id="crop-preview-img" style="width:100%;height:100%;object-fit:cover;object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
-      </div>
-      <p class="section-label" style="padding:16px 18px 0;">${t("Appuie sur la photo pour choisir ce qui doit rester visible")}</p>
-      <div class="crop-full-wrap" id="crop-full-wrap">
-        <img src="${newBd.photoSrc}" id="crop-full-img" alt=""/>
-        <div class="crop-full-marker" id="crop-full-marker" style="left:${adjustFocusX}%; top:${adjustFocusY}%;"></div>
+      <p class="section-label" style="padding:14px 18px 0;">${t("Fais glisser la photo pour choisir ce qui est affiché")}</p>
+      <div class="pan-frame round" id="pan-frame">
+        <img src="${newBd.photoSrc}" draggable="false" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
       </div>
       <div class="form-block" style="padding-top:16px;">
         <button class="btn-primary" id="save-crop-btn">${t("Valider ce cadrage")}</button>
@@ -2730,16 +2734,7 @@ function renderAdjustBdPhotoSheet(){
 }
 function bindAdjustBdPhotoSheet(){
   document.getElementById("close-sheet").addEventListener("click", ()=>{ modalType = "addBirthday"; renderOverlay(); });
-  const fullImg = document.getElementById("crop-full-img");
-  const marker = document.getElementById("crop-full-marker");
-  const previewImg = document.getElementById("crop-preview-img");
-  document.getElementById("crop-full-wrap").addEventListener("click", (e)=>{
-    const rect = fullImg.getBoundingClientRect();
-    adjustFocusX = Math.round(Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)));
-    adjustFocusY = Math.round(Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)));
-    marker.style.left = adjustFocusX + "%"; marker.style.top = adjustFocusY + "%";
-    previewImg.style.objectPosition = `${adjustFocusX}% ${adjustFocusY}%`;
-  });
+  mountPanCrop(document.getElementById("pan-frame"));
   document.getElementById("save-crop-btn").addEventListener("click", async ()=>{
     newBd.fx = adjustFocusX; newBd.fy = adjustFocusY;
     newBd.photo = await bakeSquareCrop(newBd.photoSrc, adjustFocusX, adjustFocusY, 400);
@@ -3278,14 +3273,9 @@ function renderAdjustNewPhotoCropSheet(){
           `).join("")}
         </div>
       ` : ""}
-      <p class="section-label" style="padding:14px 18px 0;">${t("Aperçu dans le fil")}</p>
-      <div class="crop-preview">
-        <img src="${photo.url}" id="crop-preview-img" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
-      </div>
-      <p class="section-label" style="padding:16px 18px 0;">${t("Appuie sur la photo pour choisir ce qui doit rester visible")}</p>
-      <div class="crop-full-wrap" id="crop-full-wrap">
-        <img src="${photo.url}" id="crop-full-img" alt=""/>
-        <div class="crop-full-marker" id="crop-full-marker" style="left:${adjustFocusX}%; top:${adjustFocusY}%;"></div>
+      <p class="section-label" style="padding:14px 18px 0;">${t("Fais glisser la photo pour choisir ce qui est affiché")}</p>
+      <div class="pan-frame" id="pan-frame">
+        <img src="${photo.url}" draggable="false" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
       </div>
       <div class="form-block" style="padding-top:16px;">
         <button class="btn-primary" id="save-crop-btn">${t("Valider ce cadrage")}</button>
@@ -3305,25 +3295,41 @@ function bindAdjustNewPhotoCropSheet(){
       renderOverlay();
     });
   });
-  const fullWrap = document.getElementById("crop-full-wrap");
-  const fullImg = document.getElementById("crop-full-img");
-  const marker = document.getElementById("crop-full-marker");
-  const previewImg = document.getElementById("crop-preview-img");
-  function setFocusFromEvent(clientX, clientY){
-    const rect = fullImg.getBoundingClientRect();
-    const x = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
-    const y = Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100));
-    adjustFocusX = Math.round(x); adjustFocusY = Math.round(y);
-    marker.style.left = adjustFocusX + "%"; marker.style.top = adjustFocusY + "%";
-    previewImg.style.objectPosition = `${adjustFocusX}% ${adjustFocusY}%`;
-  }
-  fullWrap.addEventListener("click", (e)=> setFocusFromEvent(e.clientX, e.clientY));
+  mountPanCrop(document.getElementById("pan-frame"));
   document.getElementById("save-crop-btn").addEventListener("click", ()=>{
     newPostPhotos[adjustNewPhotoIndex].focusX = adjustFocusX;
     newPostPhotos[adjustNewPhotoIndex].focusY = adjustFocusY;
     modalType = "addPost";
     renderOverlay();
   });
+}
+
+/* Instagram-style crop: drag the photo inside a frame showing exactly what will be displayed */
+function mountPanCrop(frame){
+  if(!frame) return;
+  const img = frame.querySelector("img");
+  let dragging = false, sx = 0, sy = 0, fx0 = 0, fy0 = 0;
+  const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
+  function overflow(){
+    const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1, fw = frame.clientWidth, fh = frame.clientHeight;
+    const sc = Math.max(fw / nw, fh / nh);
+    return { ox: nw * sc - fw, oy: nh * sc - fh };
+  }
+  frame.addEventListener("pointerdown", (e)=>{
+    dragging = true; sx = e.clientX; sy = e.clientY; fx0 = adjustFocusX; fy0 = adjustFocusY;
+    frame.classList.add("dragging");
+    try{ frame.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  frame.addEventListener("pointermove", (e)=>{
+    if(!dragging) return;
+    const { ox, oy } = overflow();
+    if(ox > 1) adjustFocusX = clamp(fx0 - (e.clientX - sx) / ox * 100);
+    if(oy > 1) adjustFocusY = clamp(fy0 - (e.clientY - sy) / oy * 100);
+    img.style.objectPosition = `${adjustFocusX}% ${adjustFocusY}%`;
+  });
+  const end = ()=>{ dragging = false; frame.classList.remove("dragging"); };
+  frame.addEventListener("pointerup", end);
+  frame.addEventListener("pointercancel", end);
 }
 
 function renderAdjustCropSheet(){
@@ -3345,14 +3351,9 @@ function renderAdjustCropSheet(){
           `).join("")}
         </div>
       ` : ""}
-      <p class="section-label" style="padding:14px 18px 0;">${t("Aperçu dans le fil")}</p>
-      <div class="crop-preview">
-        <img src="${photo.url}" id="crop-preview-img" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
-      </div>
-      <p class="section-label" style="padding:16px 18px 0;">${t("Appuie sur la photo pour choisir ce qui doit rester visible")}</p>
-      <div class="crop-full-wrap" id="crop-full-wrap">
-        <img src="${photo.url}" id="crop-full-img" alt=""/>
-        <div class="crop-full-marker" id="crop-full-marker" style="left:${adjustFocusX}%; top:${adjustFocusY}%;"></div>
+      <p class="section-label" style="padding:14px 18px 0;">${t("Fais glisser la photo pour choisir ce qui est affiché")}</p>
+      <div class="pan-frame" id="pan-frame">
+        <img src="${photo.url}" draggable="false" style="object-position:${adjustFocusX}% ${adjustFocusY}%" alt=""/>
       </div>
       <div class="form-block" style="padding-top:16px;">
         <button class="btn-primary" id="save-crop-btn">${t("Enregistrer ce cadrage")}</button>
@@ -3374,19 +3375,7 @@ function bindAdjustCropSheet(){
       renderOverlay();
     });
   });
-  const fullWrap = document.getElementById("crop-full-wrap");
-  const fullImg = document.getElementById("crop-full-img");
-  const marker = document.getElementById("crop-full-marker");
-  const previewImg = document.getElementById("crop-preview-img");
-  function setFocusFromEvent(clientX, clientY){
-    const rect = fullImg.getBoundingClientRect();
-    const x = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
-    const y = Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100));
-    adjustFocusX = Math.round(x); adjustFocusY = Math.round(y);
-    marker.style.left = adjustFocusX + "%"; marker.style.top = adjustFocusY + "%";
-    previewImg.style.objectPosition = `${adjustFocusX}% ${adjustFocusY}%`;
-  }
-  fullWrap.addEventListener("click", (e)=> setFocusFromEvent(e.clientX, e.clientY));
+  mountPanCrop(document.getElementById("pan-frame"));
   document.getElementById("save-crop-btn").addEventListener("click", async (e)=>{
     const btn = e.currentTarget;
     btn.disabled = true; btn.textContent = t("Enregistrement…");
@@ -3883,7 +3872,15 @@ function renderAddPostSheet(){
         </div>
         <div class="field">
           <label>${t("Date")}</label>
-          <input type="date" id="post-date" value="${newPostDate || localTodayISO()}" max="${localTodayISO()}" />
+          ${(()=>{
+            const [py, pm, pd] = (newPostDate || localTodayISO()).split("-").map(Number);
+            const cy = new Date().getFullYear();
+            return `<div style="display:flex; gap:8px;">
+              <select id="post-d">${dayOptions(pd)}</select>
+              <select id="post-m">${monthOptions(pm)}</select>
+              <select id="post-y">${Array.from({length:21},(_, i)=> cy - i).map(y => `<option value="${y}" ${y===py?"selected":""}>${y}</option>`).join("")}</select>
+            </div>`;
+          })()}
         </div>
         <div class="field">
           <label>${t("Lieu (facultatif)")}</label>
@@ -3946,8 +3943,18 @@ function bindAddPostSheet(){
       renderOverlay();
     });
   });
-  const dateInput = document.getElementById("post-date");
-  dateInput.addEventListener("change", ()=>{ newPostDate = dateInput.value; });
+  const pdSel = document.getElementById("post-d"), pmSel = document.getElementById("post-m"), pySel = document.getElementById("post-y");
+  function syncPostDate(){
+    const y = Number(pySel.value), m = Number(pmSel.value);
+    let d = Number(pdSel.value);
+    d = Math.min(d, new Date(y, m, 0).getDate());   // e.g. 31 Feb -> 28/29 Feb
+    let iso = y + "-" + String(m).padStart(2,"0") + "-" + String(d).padStart(2,"0");
+    if(iso > localTodayISO()) iso = localTodayISO(); // no future dates
+    newPostDate = iso;
+    const [Y, M, D] = iso.split("-").map(Number);
+    pdSel.value = D; pmSel.value = M; pySel.value = Y;
+  }
+  [pdSel, pmSel, pySel].forEach(el => el.addEventListener("change", syncPostDate));
   const favCheck = document.getElementById("post-favorite");
   favCheck.addEventListener("change", ()=>{ newPostFavorite = favCheck.checked; });
   const locationInput = document.getElementById("post-location");
@@ -3989,7 +3996,7 @@ function bindAddPostSheet(){
     const caption = document.getElementById("post-caption").value.trim();
     const group = getGroup(activeGroupId);
     const post = {
-      date: (document.getElementById("post-date").value || localTodayISO()), caption: caption || "…", photos: newPostPhotos, favorite: newPostFavorite,
+      date: (newPostDate || localTodayISO()), caption: caption || "…", photos: newPostPhotos, favorite: newPostFavorite,
       location: newPostLocation.trim(), taggedIds: newPostTaggedIds
     };
     await insertPost(group.id, post);
